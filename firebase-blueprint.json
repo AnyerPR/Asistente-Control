@@ -1,0 +1,100 @@
+{
+  "entities": {
+    "departamentos": {
+      "title": "Departamentos de Control de Agua",
+      "description": "Áreas hospitalarias y sus cuotas de faldos y botellones",
+      "properties": {
+        "nombre": { "type": "string" },
+        "faldos": { "type": "object" },
+        "botellones": { "type": "object" },
+        "actualizadoEn": { "type": "string" }
+      },
+      "required": ["nombre"]
+    },
+    "destinatarios": {
+      "title": "Catálogo de Destinatarios",
+      "description": "Personal destinatario de documentos oficiales",
+      "properties": {
+        "nombre": { "type": "string" },
+        "cargo": { "type": "string" },
+        "dependencia": { "type": "string" },
+        "activo": { "type": "boolean" }
+      },
+      "required": ["nombre", "cargo"]
+    },
+    "historial": {
+      "title": "Historial de Entrega de Agua",
+      "description": "Constancias de entregas parciales de faldos y botellones",
+      "properties": {
+        "idConsecutivo": { "type": "number" },
+        "fecha": { "type": "string" },
+        "hora": { "type": "string" },
+        "departamento": { "type": "string" },
+        "producto": { "type": "string" },
+        "cantidad": { "type": "number" },
+        "habilitado": { "type": "number" },
+        "frecuencia": { "type": "string" },
+        "cuota": { "type": "string" },
+        "pendiente": { "type": "number" },
+        "responsable": { "type": "string" },
+        "receptor": { "type": "string" },
+        "creadoEn": { "type": "string" }
+      },
+      "required": ["departamento", "producto", "cantidad"]
+    },
+    "despachos_globales": {
+      "title": "Despachos Globales",
+      "description": "Registros de despachos hospitalarios de medicamentos e insumos",
+      "properties": {
+        "numeroDespacho": { "type": "string" },
+        "paciente": { "type": "string" },
+        "departamento": { "type": "string" },
+        "fecha": { "type": "string" },
+        "hora": { "type": "string" },
+        "estado": { "type": "string" },
+        "responsable": { "type": "string" },
+        "medicamentos": { "type": "array" },
+        "totales": { "type": "number" },
+        "observaciones": { "type": "string" },
+        "creadoEn": { "type": "string" }
+      },
+      "required": ["numeroDespacho", "paciente", "estado"]
+    },
+    "salidas_almacen": {
+      "title": "Salidas de Almacén",
+      "description": "Registro de salidas de bienes, medicamentos y equipos del almacén",
+      "properties": {
+        "fecha": { "type": "string" },
+        "hora": { "type": "string" },
+        "tipoSalida": { "type": "string" },
+        "categoriaBien": { "type": "string" },
+        "items": { "type": "string" },
+        "descripcion": { "type": "string" },
+        "cantidad": { "type": "number" },
+        "unidad": { "type": "string" },
+        "personaRecibe": { "type": "string" },
+        "personaEntrega": { "type": "string" },
+        "departamentoSolicitante": { "type": "string" },
+        "observaciones": { "type": "string" },
+        "usuarioRegistro": { "type": "string" },
+        "creadoEn": { "type": "string" }
+      },
+      "required": ["fecha", "tipoSalida", "categoriaBien", "personaRecibe", "personaEntrega"]
+    },
+    "entradas_mercancia": {
+      "title": "Entradas de Mercancía",
+      "description": "Actas de recepción e ingreso de materiales al almacén",
+      "properties": {
+        "proveedor": { "type": "string" },
+        "documento": { "type": "string" },
+        "destino": { "type": "string" },
+        "observaciones": { "type": "string" },
+        "items": { "type": "array" },
+        "fecha": { "type": "string" },
+        "hora": { "type": "string" },
+        "creadoEn": { "type": "string" }
+      },
+      "required": ["proveedor", "documento"]
+    }
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "name": "Hospital Supply Manager",
+  "description": "Sistema de gestión de suministros hospitalarios, despacho global, control de agua, correspondencia, salidas de almacén e inventario con Firestore.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
