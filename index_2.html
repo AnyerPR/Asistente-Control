@@ -660,6 +660,13 @@
                           <td className="p-3 text-right">
                             <div className="flex items-center justify-end gap-2">
                               <button
+                                onClick={() => handleGenerarPDFSalida(item)}
+                                className="bg-cyan-950 hover:bg-cyan-900 border border-cyan-800 text-cyan-300 px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1 cursor-pointer"
+                                title="Generar Documento PDF"
+                              >
+                                <i className="fa-solid fa-file-pdf"></i> PDF
+                              </button>
+                              <button
                                 onClick={() => handleGenerarWordSalida(item)}
                                 className="bg-blue-950 hover:bg-blue-900 border border-blue-800 text-blue-300 px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1 cursor-pointer"
                                 title="Generar Documento Word"
@@ -849,7 +856,9 @@
 
                   <div className="flex justify-end gap-2 pt-3">
                     <button type="button" onClick={() => setShowNuevaSalidaModal(false)} className="px-4 py-2 bg-gray-800 text-gray-300 text-xs font-semibold rounded-xl">Cancelar</button>
-                    <button type="submit" className="px-5 py-2 bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold rounded-xl shadow">Guardar y Descargar Word</button>
+                    <button type="submit" className="px-5 py-2 bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold rounded-xl shadow flex items-center gap-1.5">
+                      <i className="fa-solid fa-file-pdf"></i> Guardar y Descargar PDF / Word
+                    </button>
                   </div>
                 </form>
               </div>
