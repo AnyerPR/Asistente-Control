@@ -1,0 +1,914 @@
+<!DOCTYPE html>
+<html lang="es" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Hospital Supply Manager — Acceso Directo Autónomo (index_2.html)</title>
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            cyan: {
+              950: '#083344',
+              900: '#164e63',
+              800: '#155e75',
+              700: '#0e7490',
+              600: '#0891b2',
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- React 18 & Babel Standalone for direct double-click browser execution -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <!-- Firebase Compat v10 (for direct HTML file execution without bundlers) -->
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+
+  <!-- Document Exporters (jsPDF, autoTable, docx, FileSaver, XLSX) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+  <script src="https://unpkg.com/docx@8.5.0/build/index.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+  <!-- FontAwesome 6 for Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+
+  <style>
+    @keyframes fadeIn {
+      from { opacity: 0; transform: scale(0.97); }
+      to { opacity: 1; transform: scale(1); }
+    }
+    .animate-fadeIn {
+      animation: fadeIn 0.2s ease-out forwards;
+    }
+    .custom-scrollbar::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-track {
+      background: #0f172a;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background: #334155;
+      border-radius: 9999px;
+    }
+  </style>
+</head>
+<body class="bg-gray-950 text-gray-100 min-h-screen flex flex-col font-sans selection:bg-cyan-500 selection:text-white">
+  <div id="root" class="flex-1 flex flex-col"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    // --- Firebase Initialization ---
+    const firebaseConfig = {
+      projectId: "named-amphora-q54g5",
+      appId: "1:300648033842:web:0713187458bcefb383162b",
+      apiKey: "AIzaSyB9m-Azb8KGmH1UNnpNMjL6kQzmIirur-8",
+      authDomain: "named-amphora-q54g5.firebaseapp.com",
+      storageBucket: "named-amphora-q54g5.firebasestorage.app",
+      messagingSenderId: "300648033842"
+    };
+
+    let db = null;
+    let isOnlineFirestore = false;
+
+    try {
+      if (!firebase.apps.length) {
+        firebase.initializeApp(firebaseConfig);
+      }
+      db = firebase.firestore();
+      db.settings({ experimentalAutoDetectLongPolling: true });
+      isOnlineFirestore = true;
+    } catch (e) {
+      console.warn("Firestore offline fallback local storage activated:", e);
+    }
+
+    // --- Modal de Confirmación Universal ---
+    function ConfirmModal({ isOpen, title, message, itemName, onConfirm, onClose, loading }) {
+      if (!isOpen) return null;
+      return (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-gray-900 border border-red-500/40 rounded-2xl max-w-md w-full p-6 shadow-2xl relative text-gray-100">
+            <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-white p-1 rounded-lg">
+              <i className="fa-solid fa-xmark text-lg"></i>
+            </button>
+            <div className="flex items-start gap-4 mb-4">
+              <div className="p-3 bg-red-950/80 border border-red-800/60 rounded-2xl text-red-400 shrink-0">
+                <i className="fa-solid fa-triangle-exclamation text-xl"></i>
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-white">{title || 'Confirmar Eliminación'}</h3>
+                <p className="text-xs text-red-300/80 mt-0.5">Esta acción es irreversible y eliminará el registro de la base de datos.</p>
+              </div>
+            </div>
+
+            <div className="bg-gray-950 border border-gray-800 rounded-xl p-3.5 mb-5 text-sm text-gray-300">
+              <p>{message}</p>
+              {itemName && (
+                <p className="mt-2 text-xs font-semibold text-amber-300 bg-amber-950/40 border border-amber-800/40 p-2 rounded-lg break-words">
+                  "{itemName}"
+                </p>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={onClose}
+                disabled={loading}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-gray-300 hover:bg-gray-800 border border-gray-700 transition-all cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={onConfirm}
+                disabled={loading}
+                className="px-4 py-2 rounded-xl text-xs font-semibold bg-red-600 hover:bg-red-500 text-white shadow-lg flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
+              >
+                <i className="fa-solid fa-trash-can"></i> {loading ? 'Eliminando...' : 'Sí, Eliminar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // --- Modal Destinatarios Seleccionables ---
+    function DestinatariosModal({ isOpen, onClose, onSelectDestino, onShowToast }) {
+      const [destinatarios, setDestinatarios] = useState([]);
+      const [search, setSearch] = useState('');
+      const [nuevoNombre, setNuevoNombre] = useState('');
+      const [nuevoCargo, setNuevoCargo] = useState('');
+      const [nuevaDep, setNuevaDep] = useState('');
+
+      useEffect(() => {
+        if (!isOpen) return;
+        if (db && isOnlineFirestore) {
+          const unsub = db.collection('destinatarios').orderBy('nombre', 'asc').onSnapshot(snap => {
+            setDestinatarios(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+          });
+          return () => unsub();
+        }
+      }, [isOpen]);
+
+      if (!isOpen) return null;
+
+      const handleAdd = async (e) => {
+        e.preventDefault();
+        if (!nuevoNombre || !nuevoCargo) return;
+        const newD = { nombre: nuevoNombre, cargo: nuevoCargo, dependencia: nuevaDep, activo: true };
+        if (db && isOnlineFirestore) {
+          await db.collection('destinatarios').add(newD);
+        }
+        setNuevoNombre(''); setNuevoCargo(''); setNuevaDep('');
+        onShowToast('success', 'Destinatario Agregado', 'Guardado correctamente.');
+      };
+
+      const filtered = destinatarios.filter(d => d.nombre.toLowerCase().includes(search.toLowerCase()) || d.cargo.toLowerCase().includes(search.toLowerCase()));
+
+      return (
+        <div className="fixed inset-0 z-[180] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-gray-900 border border-gray-800 rounded-2xl max-w-2xl w-full p-6 shadow-2xl relative text-gray-100 flex flex-col max-h-[85vh]">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <i className="fa-solid fa-users-gear text-cyan-400"></i> Directorio de Destinatarios Oficiales
+              </h3>
+              <button onClick={onClose} className="text-gray-400 hover:text-white"><i className="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+
+            <form onSubmit={handleAdd} className="grid grid-cols-1 md:grid-cols-3 gap-2 mb-4 bg-gray-950 p-3 rounded-xl border border-gray-800">
+              <input type="text" placeholder="Nombre completo" value={nuevoNombre} onChange={e => setNuevoNombre(e.target.value)} required className="bg-gray-900 border border-gray-700 px-3 py-1.5 rounded-lg text-xs text-white" />
+              <input type="text" placeholder="Cargo u Oficio" value={nuevoCargo} onChange={e => setNuevoCargo(e.target.value)} required className="bg-gray-900 border border-gray-700 px-3 py-1.5 rounded-lg text-xs text-white" />
+              <div className="flex gap-2">
+                <input type="text" placeholder="Departamento" value={nuevaDep} onChange={e => setNuevaDep(e.target.value)} className="bg-gray-900 border border-gray-700 px-3 py-1.5 rounded-lg text-xs text-white flex-1" />
+                <button type="submit" className="bg-cyan-600 hover:bg-cyan-500 px-3 py-1.5 rounded-lg text-xs font-bold text-white shadow"><i className="fa-solid fa-plus"></i></button>
+              </div>
+            </form>
+
+            <input type="text" placeholder="Buscar destinatario..." value={search} onChange={e => setSearch(e.target.value)} className="bg-gray-950 border border-gray-800 px-3 py-2 rounded-xl text-xs text-white mb-3" />
+
+            <div className="overflow-y-auto flex-1 custom-scrollbar space-y-2 pr-1">
+              {filtered.map(d => (
+                <div key={d.id} className="p-3 bg-gray-950 border border-gray-800 rounded-xl flex justify-between items-center hover:border-cyan-700/50 transition-all">
+                  <div>
+                    <p className="font-bold text-xs text-white">{d.nombre}</p>
+                    <p className="text-[11px] text-cyan-400">{d.cargo} {d.dependencia ? `— ${d.dependencia}` : ''}</p>
+                  </div>
+                  {onSelectDestino && (
+                    <button onClick={() => { onSelectDestino(d); onClose(); }} className="bg-cyan-950 hover:bg-cyan-900 border border-cyan-800 text-cyan-300 px-3 py-1 rounded-lg text-xs font-bold">
+                      Seleccionar
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // --- Componente Principal Hospital App ---
+    function App() {
+      const [usuario, setUsuario] = useState("Lic. Julián Pérez (Almacén)");
+      const [activeTab, setActiveTab] = useState("salidas");
+      const [toast, setToast] = useState(null);
+
+      // Data States
+      const [salidas, setSalidas] = useState([]);
+      const [departamentosAgua, setDepartamentosAgua] = useState([]);
+      const [historialAgua, setHistorialAgua] = useState([]);
+      const [despachosGlobales, setDespachosGlobales] = useState([]);
+
+      // Modals
+      const [showNuevaSalidaModal, setShowNuevaSalidaModal] = useState(false);
+      const [showDestinatarios, setShowDestinatarios] = useState(false);
+      const [onDestinoCallback, setOnDestinoCallback] = useState(null);
+
+      // Delete items states for ConfirmModal
+      const [salidaAEliminar, setSalidaAEliminar] = useState(null);
+      const [deptAguaAEliminar, setDeptAguaAEliminar] = useState(null);
+      const [historialAguaAEliminar, setHistorialAguaAEliminar] = useState(null);
+      const [despachoAEliminar, setDespachoAEliminar] = useState(null);
+      const [deleting, setDeleting] = useState(false);
+
+      // Form State Nueva Salida
+      const [items, setItems] = useState('');
+      const [descripcion, setDescripcion] = useState('');
+      const [cantidad, setCantidad] = useState(1);
+      const [unidad, setUnidad] = useState('Unidades');
+      const [tipoSalida, setTipoSalida] = useState('Consumo Interno');
+      const [categoriaBien, setCategoriaBien] = useState('Material médico');
+      const [departamentoSolicitante, setDepartamentoSolicitante] = useState('Urgencias');
+      const [personaEntrega, setPersonaEntrega] = useState(usuario);
+      const [personaRecibe, setPersonaRecibe] = useState('');
+      const [observaciones, setObservaciones] = useState('');
+
+      const showToast = (type, title, message) => {
+        setToast({ type, title, message });
+        setTimeout(() => setToast(null), 4000);
+      };
+
+      // Realtime Subscriptions
+      useEffect(() => {
+        if (db && isOnlineFirestore) {
+          const unsub1 = db.collection('salidas_almacen').orderBy('fecha', 'desc').onSnapshot(snap => {
+            setSalidas(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+          });
+          const unsub2 = db.collection('departamentos').onSnapshot(snap => {
+            setDepartamentosAgua(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+          });
+          const unsub3 = db.collection('historial_agua').orderBy('idConsecutivo', 'desc').onSnapshot(snap => {
+            setHistorialAgua(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+          });
+          const unsub4 = db.collection('despachos_globales').orderBy('fecha', 'desc').onSnapshot(snap => {
+            setDespachosGlobales(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+          });
+          return () => { unsub1(); unsub2(); unsub3(); unsub4(); };
+        } else {
+          setSalidas(JSON.parse(localStorage.getItem('salidas_almacen') || '[]'));
+          setDepartamentosAgua(JSON.parse(localStorage.getItem('departamentos_agua') || '[]'));
+        }
+      }, []);
+
+      // Generador de Comprobante en PDF
+      const handleGenerarPDFSalida = (salida, destData) => {
+        const jspdfModule = window.jspdf || window.jsPDF;
+        if (!jspdfModule) { alert('Error cargando jsPDF engine'); return; }
+        const { jsPDF } = jspdfModule.jsPDF ? jspdfModule : { jsPDF: jspdfModule };
+        const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+        const pageWidth = doc.internal.pageSize.getWidth();
+
+        const receptorNombre = destData ? destData.nombre : salida.personaRecibe;
+        const receptorCargo = destData ? destData.cargo : salida.departamentoSolicitante;
+
+        // Dark Banner Header
+        doc.setFillColor(15, 23, 42);
+        doc.rect(0, 0, pageWidth, 32, 'F');
+
+        doc.setTextColor(255, 255, 255);
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(13);
+        doc.text("HOSPITAL INFANTIL ROBERT REID CABRAL", 14, 13);
+
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8.5);
+        doc.setTextColor(148, 163, 184);
+        doc.text("HOSPITAL SUPPLY MANAGER — COMPROBANTE OFICIAL DE SALIDA", 14, 20);
+
+        doc.setFillColor(14, 116, 144);
+        doc.roundedRect(pageWidth - 55, 10, 41, 8, 2, 2, 'F');
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'bold');
+        doc.text("SALIDA OFICIAL", pageWidth - 34.5, 15, { align: 'center' });
+
+        let y = 40;
+        doc.setFillColor(248, 250, 252);
+        doc.setDrawColor(226, 232, 240);
+        doc.roundedRect(14, y, pageWidth - 28, 42, 3, 3, 'FD');
+
+        doc.setTextColor(15, 23, 42);
+        doc.setFontSize(9.5);
+        doc.setFont('helvetica', 'bold');
+        doc.text(`PARA: ${receptorNombre.toUpperCase()}`, 20, y + 9);
+
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8.5);
+        doc.text(`CARGO / DEPTO: ${receptorCargo}`, 20, y + 16);
+        doc.text(`ENTREGADO POR: ${salida.personaEntrega} (Almacén Central)`, 20, y + 23);
+        doc.text(`TIPO DE SALIDA: ${salida.tipoSalida} | CATEGORÍA: ${salida.categoriaBien}`, 20, y + 30);
+        doc.text(`FECHA DE EMISIÓN: ${salida.fecha || new Date().toLocaleDateString()} — ${salida.hora || ''}`, 20, y + 37);
+
+        y += 50;
+
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(11);
+        doc.setTextColor(15, 23, 42);
+        doc.text("DETALLE DE LOS BIENES ENTREGADOS", 14, y);
+
+        y += 8;
+
+        const autoTableFn = doc.autoTable || (window.jspdf && window.jspdf.autoTable);
+        if (autoTableFn) {
+          autoTableFn.call(doc, doc, {
+            startY: y,
+            head: [['Ítem / Bien Insumo', 'Descripción / Marca', 'Cantidad', 'Unidad']],
+            body: [
+              [salida.items, salida.descripcion || 'N/A', salida.cantidad, salida.unidad]
+            ],
+            theme: 'grid',
+            headStyles: { fillColor: [14, 116, 144], textColor: [255, 255, 255], fontStyle: 'bold' }
+          });
+          y = (doc.lastAutoTable ? doc.lastAutoTable.finalY : y + 30) + 15;
+        } else {
+          doc.setFontSize(10);
+          doc.text(`• ${salida.items} — Cantidad: ${salida.cantidad} ${salida.unidad} (${salida.descripcion})`, 14, y);
+          y += 25;
+        }
+
+        if (salida.observaciones) {
+          doc.setFont('helvetica', 'bold');
+          doc.setFontSize(9);
+          doc.text(`Observaciones: ${salida.observaciones}`, 14, y);
+          y += 15;
+        }
+
+        const sigY = Math.max(y + 25, 225);
+        doc.setDrawColor(148, 163, 184);
+        doc.line(25, sigY, 85, sigY);
+        doc.line(pageWidth - 85, sigY, pageWidth - 25, sigY);
+
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(51, 65, 85);
+        doc.text("ENTREGADO POR (ALMACÉN)", 55, sigY + 5, { align: 'center' });
+        doc.text("RECIBIDO CONFORME", pageWidth - 55, sigY + 5, { align: 'center' });
+
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(100, 116, 139);
+        doc.text(salida.personaEntrega, 55, sigY + 9, { align: 'center' });
+        doc.text(receptorNombre, pageWidth - 55, sigY + 9, { align: 'center' });
+
+        doc.save(`Comprobante_Salida_${salida.items.substring(0, 15).replace(/\s+/g, '_')}.pdf`);
+        showToast('success', 'PDF Generado', 'Comprobante oficial en PDF descargado.');
+      };
+
+      // Generador de Carta en Word (.docx)
+      const handleGenerarWordSalida = async (salida, destData) => {
+        const { docx, saveAs } = window;
+        if (!docx) { alert('Error cargando docx engine'); return; }
+
+        const receptorNombre = destData ? destData.nombre : salida.personaRecibe;
+        const receptorCargo = destData ? destData.cargo : salida.departamentoSolicitante;
+
+        const doc = new docx.Document({
+          sections: [{
+            children: [
+              new docx.Paragraph({
+                children: [new docx.TextRun({ text: "HOSPITAL INFANTIL ROBERT REID CABRAL", bold: true, size: 26, color: "0F172A" })],
+                alignment: docx.AlignmentType.CENTER
+              }),
+              new docx.Paragraph({
+                children: [new docx.TextRun({ text: "DEPARTAMENTO DE ALMACÉN CENTRAL — SUMINISTROS", bold: true, size: 18, color: "0E7490" })],
+                alignment: docx.AlignmentType.CENTER
+              }),
+              new docx.Paragraph({ text: "" }),
+              new docx.Paragraph({
+                children: [new docx.TextRun({ text: `Santo Domingo, R.D. — ${salida.fecha || new Date().toLocaleDateString()}`, bold: true, size: 20 })],
+                alignment: docx.AlignmentType.RIGHT
+              }),
+              new docx.Paragraph({ text: "" }),
+              new docx.Paragraph({ children: [new docx.TextRun({ text: "CARTA OFICIO DE DESPACHO Y SALIDA DE BIENES", bold: true, size: 22 })] }),
+              new docx.Paragraph({ text: "" }),
+              new docx.Paragraph({ children: [new docx.TextRun({ text: "PARA: ", bold: true }), new docx.TextRun({ text: receptorNombre.toUpperCase(), bold: true })] }),
+              new docx.Paragraph({ children: [new docx.TextRun({ text: "CARGO: ", bold: true }), new docx.TextRun({ text: receptorCargo })] }),
+              new docx.Paragraph({ children: [new docx.TextRun({ text: "DE: ", bold: true }), new docx.TextRun({ text: `${salida.personaEntrega} (Almacén Central)` })] }),
+              new docx.Paragraph({ text: "" }),
+              new docx.Paragraph({
+                children: [
+                  new docx.TextRun({ text: `Por medio del presente documento oficial, se certifica la entrega formal de los bienes e insumos hospitalarios pertenecientes a la categoría de ` }),
+                  new docx.TextRun({ text: salida.categoriaBien, bold: true }),
+                  new docx.TextRun({ text: `, destinados al servicio de ${salida.departamentoSolicitante}:` })
+                ]
+              }),
+              new docx.Paragraph({ text: "" }),
+              new docx.Paragraph({
+                children: [
+                  new docx.TextRun({ text: `• ${salida.items} (Cantidad: ${salida.cantidad} ${salida.unidad}) — ${salida.descripcion}`, bold: true })
+                ]
+              }),
+              new docx.Paragraph({ text: "" }),
+              new docx.Paragraph({ text: "_____________________________________          _____________________________________", alignment: docx.AlignmentType.CENTER }),
+              new docx.Paragraph({ text: "ENTREGADO POR                                            RECIBIDO CONFORME", bold: true, size: 18 }, { alignment: docx.AlignmentType.CENTER }),
+              new docx.Paragraph({ text: `${salida.personaEntrega}                                    ${receptorNombre}`, size: 16 }, { alignment: docx.AlignmentType.CENTER })
+            ]
+          }]
+        });
+
+        const blob = await docx.Packer.toBlob(doc);
+        saveAs(blob, `Carta_Salida_${salida.items.substring(0, 15).replace(/\s+/g, '_')}.docx`);
+        showToast('success', 'Word Generado', 'Documento oficial en Word descargado.');
+      };
+
+      // Handlers de Guardar y Eliminar
+      const handleGuardarSalida = async (e) => {
+        e.preventDefault();
+        const nuevaSalida = {
+          items, descripcion, cantidad: Number(cantidad), unidad, tipoSalida, categoriaBien,
+          departamentoSolicitante, personaEntrega, personaRecibe, observaciones,
+          fecha: new Date().toLocaleDateString('es-ES'),
+          hora: new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })
+        };
+
+        try {
+          if (db && isOnlineFirestore) {
+            const docRef = await db.collection('salidas_almacen').add(nuevaSalida);
+            const salidaConId = { ...nuevaSalida, id: docRef.id };
+            handleGenerarPDFSalida(salidaConId);
+            await handleGenerarWordSalida(salidaConId);
+          } else {
+            const updated = [nuevaSalida, ...salidas];
+            setSalidas(updated);
+            localStorage.setItem('salidas_almacen', JSON.stringify(updated));
+            handleGenerarPDFSalida(nuevaSalida);
+            await handleGenerarWordSalida(nuevaSalida);
+          }
+          showToast('success', 'Salida Registrada', 'Se guardó y descargaron los documentos en PDF y Word.');
+          setShowNuevaSalidaModal(false);
+          setItems(''); setDescripcion('');
+        } catch (err) {
+          showToast('error', 'Error', err.message);
+        }
+      };
+
+      const handleConfirmDeleteSalida = async () => {
+        if (!salidaAEliminar) return;
+        setDeleting(true);
+        try {
+          if (db && isOnlineFirestore) {
+            await db.collection('salidas_almacen').doc(salidaAEliminar.id).delete();
+          } else {
+            const updated = salidas.filter(s => s.id !== salidaAEliminar.id);
+            setSalidas(updated);
+            localStorage.setItem('salidas_almacen', JSON.stringify(updated));
+          }
+          showToast('success', 'Eliminado', `Se eliminó "${salidaAEliminar.items}" de Firestore.`);
+          setSalidaAEliminar(null);
+        } catch (err) {
+          showToast('error', 'Error al eliminar', err.message);
+        } finally {
+          setDeleting(false);
+        }
+      };
+
+      const handleConfirmDeleteDeptAgua = async () => {
+        if (!deptAguaAEliminar) return;
+        setDeleting(true);
+        try {
+          if (db && isOnlineFirestore) {
+            await db.collection('departamentos').doc(deptAguaAEliminar.id).delete();
+          }
+          showToast('success', 'Eliminado', `Se eliminó el área ${deptAguaAEliminar.nombre}.`);
+          setDeptAguaAEliminar(null);
+        } catch (err) {
+          showToast('error', 'Error', err.message);
+        } finally { setDeleting(false); }
+      };
+
+      const handleConfirmDeleteHistorialAgua = async () => {
+        if (!historialAguaAEliminar) return;
+        setDeleting(true);
+        try {
+          if (db && isOnlineFirestore) {
+            await db.collection('historial_agua').doc(historialAguaAEliminar.id).delete();
+          }
+          showToast('success', 'Eliminado', `Registro #${historialAguaAEliminar.idConsecutivo} eliminado.`);
+          setHistorialAguaAEliminar(null);
+        } catch (err) {
+          showToast('error', 'Error', err.message);
+        } finally { setDeleting(false); }
+      };
+
+      const handleConfirmDeleteDespacho = async () => {
+        if (!despachoAEliminar) return;
+        setDeleting(true);
+        try {
+          if (db && isOnlineFirestore) {
+            await db.collection('despachos_globales').doc(despachoAEliminar.id).delete();
+          }
+          showToast('success', 'Eliminado', `Despacho #${despachoAEliminar.numeroDespacho} eliminado.`);
+          setDespachoAEliminar(null);
+        } catch (err) {
+          showToast('error', 'Error', err.message);
+        } finally { setDeleting(false); }
+      };
+
+      return (
+        <div className="flex-1 flex flex-col max-w-7xl w-full mx-auto p-4 space-y-6">
+          {/* Header */}
+          <header className="bg-gray-900 border border-gray-800 rounded-2xl p-4 flex flex-wrap justify-between items-center gap-4 shadow-2xl">
+            <div className="flex items-center gap-3">
+              <div className="p-3 bg-cyan-950 border border-cyan-800 rounded-xl text-cyan-400">
+                <i className="fa-solid fa-hospital-user text-2xl"></i>
+              </div>
+              <div>
+                <h1 className="text-lg font-extrabold text-white tracking-wide">Hospital Supply Manager</h1>
+                <p className="text-xs text-cyan-400 font-mono flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                  Acceso Standalone Todo en Uno (index_2.html)
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setShowDestinatarios(true)}
+                className="bg-gray-800 hover:bg-gray-700 text-gray-200 border border-gray-700 px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 cursor-pointer"
+              >
+                <i className="fa-solid fa-address-book text-cyan-400"></i> Directores / Destinatarios
+              </button>
+              <div className="text-right border-l border-gray-800 pl-3">
+                <p className="text-xs font-bold text-white">{usuario}</p>
+                <p className="text-[10px] text-gray-400">Almacén Central Hospitalario</p>
+              </div>
+            </div>
+          </header>
+
+          {/* Navegación Tabs */}
+          <nav className="flex items-center gap-2 border-b border-gray-800 pb-2 overflow-x-auto">
+            <button
+              onClick={() => setActiveTab('salidas')}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                activeTab === 'salidas' ? 'bg-cyan-600 text-white shadow-lg' : 'bg-gray-900 text-gray-400 hover:text-white border border-gray-800'
+              }`}
+            >
+              <i className="fa-solid fa-truck-ramp-box"></i> Salidas de Almacén ({salidas.length})
+            </button>
+            <button
+              onClick={() => setActiveTab('agua')}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                activeTab === 'agua' ? 'bg-cyan-600 text-white shadow-lg' : 'bg-gray-900 text-gray-400 hover:text-white border border-gray-800'
+              }`}
+            >
+              <i className="fa-solid fa-bottle-water"></i> Control de Agua ({departamentosAgua.length})
+            </button>
+            <button
+              onClick={() => setActiveTab('despacho')}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                activeTab === 'despacho' ? 'bg-cyan-600 text-white shadow-lg' : 'bg-gray-900 text-gray-400 hover:text-white border border-gray-800'
+              }`}
+            >
+              <i className="fa-solid fa-prescription-bottle-medical"></i> Despacho Global ({despachosGlobales.length})
+            </button>
+          </nav>
+
+          {/* Toast Notification */}
+          {toast && (
+            <div className={`fixed top-5 right-5 z-[250] p-4 rounded-2xl border shadow-2xl flex items-center gap-3 animate-fadeIn ${
+              toast.type === 'success' ? 'bg-emerald-950 border-emerald-800 text-emerald-200' : 'bg-red-950 border-red-800 text-red-200'
+            }`}>
+              <i className={`fa-solid ${toast.type === 'success' ? 'fa-circle-check text-emerald-400' : 'fa-circle-exclamation text-red-400'} text-xl`}></i>
+              <div>
+                <h4 className="font-bold text-xs">{toast.title}</h4>
+                <p className="text-[11px] opacity-80">{toast.message}</p>
+              </div>
+            </div>
+          )}
+
+          {/* Vista Salidas de Almacén */}
+          {activeTab === 'salidas' && (
+            <main className="bg-gray-900 border border-gray-800 rounded-2xl p-5 shadow-2xl space-y-4">
+              <div className="flex justify-between items-center flex-wrap gap-2">
+                <h2 className="text-sm font-bold text-white flex items-center gap-2">
+                  <i className="fa-solid fa-boxes-packing text-cyan-400"></i> Registro de Salidas de Almacén
+                </h2>
+                <button
+                  onClick={() => setShowNuevaSalidaModal(true)}
+                  className="bg-cyan-600 hover:bg-cyan-500 text-white font-bold px-3 py-2 rounded-xl text-xs flex items-center gap-2 shadow cursor-pointer"
+                >
+                  <i className="fa-solid fa-plus"></i> Registrar Nueva Salida
+                </button>
+              </div>
+
+              {salidas.length === 0 ? (
+                <div className="p-12 text-center text-gray-500 bg-gray-950 border border-gray-800 rounded-xl">
+                  <i className="fa-solid fa-box-open text-3xl mb-2 text-gray-600 block"></i>
+                  No hay registros de salida aún. Haz click en "Registrar Nueva Salida".
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="bg-gray-950 text-gray-400 border-b border-gray-800">
+                        <th className="p-3">Fecha</th>
+                        <th className="p-3">Ítem / Insumo</th>
+                        <th className="p-3">Cantidad</th>
+                        <th className="p-3">Depto. Solicitante</th>
+                        <th className="p-3">Entrega / Recibe</th>
+                        <th className="p-3 text-right">Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-800/50">
+                      {salidas.map((item) => (
+                        <tr key={item.id} className="hover:bg-gray-800/30">
+                          <td className="p-3 text-gray-400 whitespace-nowrap">{item.fecha} <br/><span className="text-[10px]">{item.hora}</span></td>
+                          <td className="p-3">
+                            <p className="font-bold text-white">{item.items}</p>
+                            <p className="text-[10px] text-gray-400">{item.descripcion}</p>
+                          </td>
+                          <td className="p-3 font-bold text-cyan-400 whitespace-nowrap">
+                            {item.cantidad} {item.unidad}
+                          </td>
+                          <td className="p-3 text-gray-300">{item.departamentoSolicitante}</td>
+                          <td className="p-3 text-gray-400">
+                            {item.personaEntrega} &rarr; <span className="text-gray-200 font-semibold">{item.personaRecibe}</span>
+                          </td>
+                          <td className="p-3 text-right">
+                            <div className="flex items-center justify-end gap-2">
+                              <button
+                                onClick={() => handleGenerarPDFSalida(item)}
+                                className="bg-cyan-950 hover:bg-cyan-900 border border-cyan-800 text-cyan-300 px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1 cursor-pointer"
+                                title="Generar Documento PDF"
+                              >
+                                <i className="fa-solid fa-file-pdf"></i> PDF
+                              </button>
+                              <button
+                                onClick={() => handleGenerarWordSalida(item)}
+                                className="bg-blue-950 hover:bg-blue-900 border border-blue-800 text-blue-300 px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1 cursor-pointer"
+                                title="Generar Documento Word"
+                              >
+                                <i className="fa-solid fa-file-word"></i> Word
+                              </button>
+                              <button
+                                onClick={() => setSalidaAEliminar(item)}
+                                className="bg-gray-800 hover:bg-red-950/80 border border-gray-700 text-gray-400 hover:text-red-400 p-1.5 rounded-lg transition-all cursor-pointer"
+                                title="Eliminar de Firestore"
+                              >
+                                <i className="fa-solid fa-trash-can"></i>
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </main>
+          )}
+
+          {/* Vista Control de Agua */}
+          {activeTab === 'agua' && (
+            <main className="bg-gray-900 border border-gray-800 rounded-2xl p-5 shadow-2xl space-y-4">
+              <div className="flex justify-between items-center">
+                <h2 className="text-sm font-bold text-white flex items-center gap-2">
+                  <i className="fa-solid fa-faucet-drip text-cyan-400"></i> Control de Agua por Departamentos
+                </h2>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="bg-gray-950 text-gray-400 border-b border-gray-800">
+                      <th className="p-3">Departamento</th>
+                      <th className="p-3">Faldos Semanales</th>
+                      <th className="p-3">Botellones Semanales</th>
+                      <th className="p-3 text-right">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-800/50">
+                    {departamentosAgua.map(dept => (
+                      <tr key={dept.id} className="hover:bg-gray-800/30">
+                        <td className="p-3 font-bold text-white">{dept.nombre}</td>
+                        <td className="p-3 text-cyan-400 font-bold">{dept.faldosSemanales || 0} faldos</td>
+                        <td className="p-3 text-cyan-400 font-bold">{dept.botellonesSemanales || 0} botellones</td>
+                        <td className="p-3 text-right">
+                          <button
+                            onClick={() => setDeptAguaAEliminar(dept)}
+                            className="bg-gray-800 hover:bg-red-950/80 border border-gray-700 text-gray-400 hover:text-red-400 p-1.5 rounded-lg transition-all cursor-pointer"
+                            title="Eliminar departamento"
+                          >
+                            <i className="fa-solid fa-trash-can"></i>
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </main>
+          )}
+
+          {/* Vista Despacho Global */}
+          {activeTab === 'despacho' && (
+            <main className="bg-gray-900 border border-gray-800 rounded-2xl p-5 shadow-2xl space-y-4">
+              <div className="flex justify-between items-center">
+                <h2 className="text-sm font-bold text-white flex items-center gap-2">
+                  <i className="fa-solid fa-prescription-bottle-medical text-cyan-400"></i> Despacho Global de Medicamentos
+                </h2>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="bg-gray-950 text-gray-400 border-b border-gray-800">
+                      <th className="p-3">No. Despacho</th>
+                      <th className="p-3">Paciente / Cama</th>
+                      <th className="p-3">Médico</th>
+                      <th className="p-3 text-right">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-800/50">
+                    {despachosGlobales.map(d => (
+                      <tr key={d.id} className="hover:bg-gray-800/30">
+                        <td className="p-3 font-bold text-white">#{d.numeroDespacho}</td>
+                        <td className="p-3 text-gray-300">{d.paciente} ({d.salaCama})</td>
+                        <td className="p-3 text-gray-400">{d.medicoTratante}</td>
+                        <td className="p-3 text-right">
+                          <button
+                            onClick={() => setDespachoAEliminar(d)}
+                            className="bg-gray-800 hover:bg-red-950/80 border border-gray-700 text-gray-400 hover:text-red-400 p-1.5 rounded-lg transition-all cursor-pointer"
+                            title="Eliminar despacho"
+                          >
+                            <i className="fa-solid fa-trash-can"></i>
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </main>
+          )}
+
+          {/* Modal Registrar Nueva Salida */}
+          {showNuevaSalidaModal && (
+            <div className="fixed inset-0 z-[190] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn">
+              <div className="bg-gray-900 border border-gray-800 rounded-2xl max-w-xl w-full p-6 shadow-2xl relative text-gray-100 max-h-[90vh] overflow-y-auto custom-scrollbar">
+                <button onClick={() => setShowNuevaSalidaModal(false)} className="absolute top-4 right-4 text-gray-400 hover:text-white">
+                  <i className="fa-solid fa-xmark text-lg"></i>
+                </button>
+                <h3 className="text-base font-bold text-white mb-4 flex items-center gap-2">
+                  <i className="fa-solid fa-box-archive text-cyan-400"></i> Registrar Salida de Almacén Central
+                </h3>
+                
+                <form onSubmit={handleGuardarSalida} className="space-y-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-300 mb-1">Ítem / Bien Despachado</label>
+                    <input type="text" value={items} onChange={e => setItems(e.target.value)} required placeholder="Ej: Jeringas 5ml, Hilo Sutura 3-0" className="w-full bg-gray-950 border border-gray-700 px-3 py-2 rounded-xl text-xs text-white" />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-300 mb-1">Descripción / Marca / Lote</label>
+                    <input type="text" value={descripcion} onChange={e => setDescripcion(e.target.value)} required placeholder="Marca, presentación, caja x 100" className="w-full bg-gray-950 border border-gray-700 px-3 py-2 rounded-xl text-xs text-white" />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-300 mb-1">Cantidad</label>
+                      <input type="number" min="1" value={cantidad} onChange={e => setCantidad(e.target.value)} required className="w-full bg-gray-950 border border-gray-700 px-3 py-2 rounded-xl text-xs text-white" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-300 mb-1">Unidad</label>
+                      <select value={unidad} onChange={e => setUnidad(e.target.value)} className="w-full bg-gray-950 border border-gray-700 px-3 py-2 rounded-xl text-xs text-white">
+                        <option value="Unidades">Unidades</option>
+                        <option value="Cajas">Cajas</option>
+                        <option value="Paquetes">Paquetes</option>
+                        <option value="Galones">Galones</option>
+                        <option value="Frascos">Frascos</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-300 mb-1">Tipo de Salida</label>
+                      <select value={tipoSalida} onChange={e => setTipoSalida(e.target.value)} className="w-full bg-gray-950 border border-gray-700 px-3 py-2 rounded-xl text-xs text-white">
+                        <option value="Consumo Interno">Consumo Interno</option>
+                        <option value="Donación">Donación</option>
+                        <option value="Préstamo">Préstamo</option>
+                        <option value="Descarte / Decomiso">Descarte / Decomiso</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-300 mb-1">Categoría</label>
+                      <select value={categoriaBien} onChange={e => setCategoriaBien(e.target.value)} className="w-full bg-gray-950 border border-gray-700 px-3 py-2 rounded-xl text-xs text-white">
+                        <option value="Material médico">Material médico</option>
+                        <option value="Oficina / Papelería">Oficina / Papelería</option>
+                        <option value="Limpieza / Insumos">Limpieza / Insumos</option>
+                        <option value="Medicamentos / Farmacia">Medicamentos / Farmacia</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-300 mb-1">Departamento Solicitante</label>
+                    <input type="text" value={departamentoSolicitante} onChange={e => setDepartamentoSolicitante(e.target.value)} required className="w-full bg-gray-950 border border-gray-700 px-3 py-2 rounded-xl text-xs text-white" />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-300 mb-1">Persona que Entrega</label>
+                      <input type="text" value={personaEntrega} onChange={e => setPersonaEntrega(e.target.value)} required className="w-full bg-gray-950 border border-gray-700 px-3 py-2 rounded-xl text-xs text-white" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-300 mb-1">Persona que Recibe</label>
+                      <input type="text" value={personaRecibe} onChange={e => setPersonaRecibe(e.target.value)} required placeholder="Nombre y apellido" className="w-full bg-gray-950 border border-gray-700 px-3 py-2 rounded-xl text-xs text-white" />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-300 mb-1">Observaciones</label>
+                    <textarea value={observaciones} onChange={e => setObservaciones(e.target.value)} rows="2" className="w-full bg-gray-950 border border-gray-700 p-3 rounded-xl text-xs text-white" placeholder="Notas de entrega opcionales..."></textarea>
+                  </div>
+
+                  <div className="flex justify-end gap-2 pt-3">
+                    <button type="button" onClick={() => setShowNuevaSalidaModal(false)} className="px-4 py-2 bg-gray-800 text-gray-300 text-xs font-semibold rounded-xl">Cancelar</button>
+                    <button type="submit" className="px-5 py-2 bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold rounded-xl shadow flex items-center gap-1.5">
+                      <i className="fa-solid fa-file-pdf"></i> Guardar y Descargar PDF / Word
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* Directory / Destinatarios Picker Modal */}
+          <DestinatariosModal
+            isOpen={showDestinatarios}
+            onClose={() => setShowDestinatarios(false)}
+            onShowToast={showToast}
+          />
+
+          {/* Modal de Confirmación para Delete Salida */}
+          <ConfirmModal
+            isOpen={!!salidaAEliminar}
+            title="Eliminar Registro de Salida"
+            message="¿Estás seguro de que deseas eliminar permanentemente esta salida de almacén?"
+            itemName={salidaAEliminar?.items}
+            onConfirm={handleConfirmDeleteSalida}
+            onClose={() => setSalidaAEliminar(null)}
+            loading={deleting}
+          />
+
+          {/* Modal de Confirmación para Delete Dept Agua */}
+          <ConfirmModal
+            isOpen={!!deptAguaAEliminar}
+            title="Eliminar Departamento"
+            message="¿Estás seguro de que deseas eliminar este departamento?"
+            itemName={deptAguaAEliminar?.nombre}
+            onConfirm={handleConfirmDeleteDeptAgua}
+            onClose={() => setDeptAguaAEliminar(null)}
+            loading={deleting}
+          />
+
+          {/* Modal de Confirmación para Delete Despacho */}
+          <ConfirmModal
+            isOpen={!!despachoAEliminar}
+            title="Eliminar Despacho"
+            message="¿Estás seguro de eliminar este despacho global?"
+            itemName={despachoAEliminar ? `Despacho #${despachoAEliminar.numeroDespacho}` : undefined}
+            onConfirm={handleConfirmDeleteDespacho}
+            onClose={() => setDespachoAEliminar(null)}
+            loading={deleting}
+          />
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>

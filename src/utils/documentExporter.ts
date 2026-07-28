@@ -407,12 +407,23 @@ export function generarPDFSalidaAlmacen(salida: SalidaAlmacen, destData?: Export
 
   y += 50;
 
+  const tableBody = (salida.itemsList && salida.itemsList.length > 0)
+    ? salida.itemsList.map((item, idx) => [
+        (idx + 1).toString(),
+        item.items,
+        item.descripcion || 'Sin especificaciones',
+        `${item.cantidad} ${item.unidad || 'u.'}`,
+        item.categoriaBien || salida.categoriaBien
+      ])
+    : [[ '1', salida.items, salida.descripcion || 'Sin especificaciones', `${salida.cantidad} ${salida.unidad}`, salida.categoriaBien ]];
+
   autoTable(doc, {
     startY: y,
-    head: [['Ítem / Bien', 'Descripción Detallada', 'Cantidad', 'Unidad']],
-    body: [[salida.items, salida.descripcion, salida.cantidad.toString(), salida.unidad]],
+    head: [['#', 'Ítem / Bien Insumo', 'Descripción / Marca / Lote', 'Cantidad', 'Categoría']],
+    body: tableBody,
     theme: 'grid',
-    headStyles: { fillColor: [15, 118, 110], textColor: [255, 255, 255], fontStyle: 'bold' }
+    headStyles: { fillColor: [15, 118, 110], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 8.5 },
+    bodyStyles: { fontSize: 8, textColor: [51, 65, 85] }
   });
 
   const finalY = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable?.finalY || y + 30;
@@ -550,7 +561,7 @@ export async function generarDOCXSalidaAlmacen(salida: SalidaAlmacen, destData?:
           }),
           new Paragraph({ text: '' }),
 
-          // Tabla del Ítem Despachado
+          // Tabla de los Ítems Despachados
           new Table({
             width: { size: 100, type: WidthType.PERCENTAGE },
             rows: [
@@ -574,14 +585,26 @@ export async function generarDOCXSalidaAlmacen(salida: SalidaAlmacen, destData?:
                   })
                 ]
               }),
-              new TableRow({
-                children: [
-                  new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: salida.items, bold: true, size: 18 })] })] }),
-                  new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: salida.descripcion, size: 18 })] })] }),
-                  new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: salida.cantidad.toString(), bold: true, size: 18 })] })] }),
-                  new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: salida.unidad, size: 18 })] })] })
-                ]
-              })
+              ...((salida.itemsList && salida.itemsList.length > 0)
+                ? salida.itemsList.map(item => new TableRow({
+                    children: [
+                      new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: item.items, bold: true, size: 18 })] })] }),
+                      new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: item.descripcion || 'Sin descripción', size: 18 })] })] }),
+                      new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: item.cantidad.toString(), bold: true, size: 18 })] })] }),
+                      new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: item.unidad || 'u.', size: 18 })] })] })
+                    ]
+                  }))
+                : [
+                    new TableRow({
+                      children: [
+                        new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: salida.items, bold: true, size: 18 })] })] }),
+                        new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: salida.descripcion, size: 18 })] })] }),
+                        new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: salida.cantidad.toString(), bold: true, size: 18 })] })] }),
+                        new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: salida.unidad, size: 18 })] })] })
+                      ]
+                    })
+                  ]
+              )
             ]
           }),
           new Paragraph({ text: '' }),

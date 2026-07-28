@@ -2,14 +2,41 @@ export interface InventoryAgua {
   historico: number;
   habilitado: number;
   entregado: number;
-  frecuencia: 'Semanal' | 'Quincenal' | 'Mensual';
+  frecuencia: 'Semanal' | 'Quincenal' | 'Mensual' | 'Personalizada';
+}
+
+export interface InventarioGeneralAgua {
+  fardosDisponibles: number;
+  botellonesDisponibles: number;
+  actualizadoEn?: string;
+  usuarioActualizacion?: string;
+}
+
+export interface EntregaHoyDetalle {
+  fecha: string;
+  hora: string;
+  usuario: string;
+  fardos: number;
+  botellones: number;
+  receptor?: string;
+  observaciones?: string;
 }
 
 export interface DepartamentoAgua {
   id?: string;
   nombre: string;
-  faldos: InventoryAgua;
-  botellones: InventoryAgua;
+  maxFardosMensual: number;
+  maxBotellonesMensual: number;
+  frecuencia: 'Semanal' | 'Quincenal' | 'Mensual' | 'Personalizada';
+  entregadoFardosPeriodo: number;
+  entregadoBotellonesPeriodo: number;
+  fechaUltimaEntrega?: string;
+  entregadoHoy?: boolean;
+  entregadoHoyDetalle?: EntregaHoyDetalle;
+  estado?: 'Normal' | 'Cerca del Límite' | 'Límite Alcanzado' | 'Excedido';
+  // Campos de compatibilidad con versiones anteriores:
+  faldos?: InventoryAgua;
+  botellones?: InventoryAgua;
   actualizadoEn?: string;
 }
 
@@ -61,16 +88,26 @@ export interface DespachoGlobal {
   creadoEn?: string;
 }
 
+export interface ItemSalida {
+  id?: string;
+  items: string; // Nombre del bien/medicamento/insumo
+  descripcion?: string;
+  cantidad: number;
+  unidad: string;
+  categoriaBien?: 'Medicamentos' | 'Material médico' | 'Equipos' | 'Otros bienes';
+}
+
 export interface SalidaAlmacen {
   id?: string;
   fecha: string;
   hora: string;
   tipoSalida: 'Transferencia' | 'Préstamo' | 'Consumo Interno' | 'Urgencia' | 'Bautizo / Donación' | 'Merma / Baja';
   categoriaBien: 'Medicamentos' | 'Material médico' | 'Equipos' | 'Otros bienes';
-  items: string;
+  items: string; // Resumen o nombre del primer bien
   descripcion: string;
   cantidad: number;
   unidad: string;
+  itemsList?: ItemSalida[]; // Lista completa de bienes/productos registrados en la salida
   personaRecibe: string;
   personaEntrega: string;
   departamentoSolicitante: string;

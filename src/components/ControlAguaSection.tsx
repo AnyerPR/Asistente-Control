@@ -1,8 +1,45 @@
 import React, { useState, useEffect } from 'react';
-import { Droplet, Package, Droplets, History, Plus, FileCheck, Send, Download, Settings2, Trash2, Printer } from 'lucide-react';
-import { collection, onSnapshot, setDoc, doc, addDoc, deleteDoc, query, orderBy } from 'firebase/firestore';
+import {
+  Droplet,
+  Package,
+  Droplets,
+  History,
+  Plus,
+  FileCheck,
+  Send,
+  Download,
+  Settings2,
+  Trash2,
+  Printer,
+  Calendar,
+  CheckSquare,
+  Square,
+  Building2,
+  AlertTriangle,
+  RefreshCw,
+  Search,
+  Sliders,
+  CheckCircle2,
+  Boxes
+} from 'lucide-react';
+import {
+  collection,
+  onSnapshot,
+  setDoc,
+  doc,
+  addDoc,
+  deleteDoc,
+  query,
+  orderBy,
+  updateDoc
+} from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../firebase';
-import { DepartamentoAgua, HistorialAgua, ExportDestinoData } from '../types';
+import {
+  DepartamentoAgua,
+  HistorialAgua,
+  InventarioGeneralAgua,
+  ExportDestinoData
+} from '../types';
 import { ConfirmModal } from './ConfirmModal';
 import {
   generarPDFRegistroAgua,
@@ -20,84 +57,166 @@ interface ControlAguaSectionProps {
 export const ControlAguaSection: React.FC<ControlAguaSectionProps> = ({
   usuarioNombre,
   onShowToast,
-  onSolicitarDestino,
+  onSolicitarDestino
 }) => {
+  // Navigation tabs
+  const [activeTab, setActiveTab] = useState<'planificacion' | 'entregas_dia' | 'inventario_general' | 'historial'>('planificacion');
+
+  // Firestore States
   const [departamentos, setDepartamentos] = useState<DepartamentoAgua[]>([]);
   const [historial, setHistorial] = useState<HistorialAgua[]>([]);
+  const [inventarioGeneral, setInventarioGeneral] = useState<InventarioGeneralAgua>({
+    fardosDisponibles: 450,
+    botellonesDisponibles: 280
+  });
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'faldos' | 'botellones' | 'historial'>('faldos');
-  const [selectedDeptIndex, setSelectedDeptIndex] = useState<number | null>(0);
+
+  // Search & Filters
+  const [searchQuery, setSearchQuery] = useState('');
+  const [dateFilter, setDateFilter] = useState(new Date().toISOString().split('T')[0]);
 
   // Modals state
   const [showAddDeptModal, setShowAddDeptModal] = useState(false);
   const [showEditDeptModal, setShowEditDeptModal] = useState(false);
-  const [showEntregaModal, setShowEntregaModal] = useState(false);
+  const [showEntregaHoyModal, setShowEntregaHoyModal] = useState(false);
+  const [showInventarioModal, setShowInventarioModal] = useState(false);
+
+  const [selectedDept, setSelectedDept] = useState<DepartamentoAgua | null>(null);
   const [editingDept, setEditingDept] = useState<DepartamentoAgua | null>(null);
 
-  // Deletion modal state
+  // Deletion modals state
   const [deptAEliminar, setDeptAEliminar] = useState<DepartamentoAgua | null>(null);
   const [historialAEliminar, setHistorialAEliminar] = useState<{ id: string; idConsecutivo: number } | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  // Delivery form state
-  const [entregaCantidad, setEntregaCantidad] = useState(1);
+  // Delivery Modal Form State
+  const [entregaFardos, setEntregaFardos] = useState(1);
+  const [entregaBotellones, setEntregaBotellones] = useState(0);
   const [entregaResponsable, setEntregaResponsable] = useState(usuarioNombre || 'Almacén Central');
   const [entregaReceptor, setEntregaReceptor] = useState('');
+  const [entregaObservaciones, setEntregaObservaciones] = useState('');
 
-  // New department form state
+  // Department creation form state
   const [newDeptNombre, setNewDeptNombre] = useState('');
-  const [newFaldosHab, setNewFaldosHab] = useState(40);
-  const [newFaldosFrec, setNewFaldosFrec] = useState<'Semanal' | 'Quincenal' | 'Mensual'>('Semanal');
-  const [newBotellonesHab, setNewBotellonesHab] = useState(50);
-  const [newBotellonesFrec, setNewBotellonesFrec] = useState<'Semanal' | 'Quincenal' | 'Mensual'>('Semanal');
+  const [newMaxFardos, setNewMaxFardos] = useState(40);
+  const [newMaxBotellones, setNewMaxBotellones] = useState(50);
+  const [newFrecuencia, setNewFrecuencia] = useState<'Semanal' | 'Quincenal' | 'Mensual' | 'Personalizada'>('Mensual');
 
-  // Firestore real-time listeners for departamentos and historial
+  // General inventory update form state
+  const [editStockFardos, setEditStockFardos] = useState(450);
+  const [editStockBotellones, setEditStockBotellones] = useState(280);
+
+  // Firestore listeners
   useEffect(() => {
     setLoading(true);
 
-    // Initial seed if departamentos collection is empty
+    // 1. General Water Inventory listener
+    const unsubInv = onSnapshot(doc(db, 'inventario_agua', 'general'), (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data() as InventarioGeneralAgua;
+        setInventarioGeneral(data);
+        setEditStockFardos(data.fardosDisponibles);
+        setEditStockBotellones(data.botellonesDisponibles);
+      } else {
+        // Initialize general water inventory
+        const defaultInv: InventarioGeneralAgua = {
+          fardosDisponibles: 450,
+          botellonesDisponibles: 280,
+          actualizadoEn: new Date().toISOString(),
+          usuarioActualizacion: usuarioNombre || 'Almacén Central'
+        };
+        setDoc(doc(db, 'inventario_agua', 'general'), defaultInv);
+      }
+    });
+
+    // 2. Departments listener
     const unsubDept = onSnapshot(collection(db, 'departamentos'), (snapshot) => {
       if (snapshot.empty) {
-        // Seed default hospital areas
+        // Initial hospital areas setup
         const initialAreas: DepartamentoAgua[] = [
           {
             id: 'dept_uci',
-            nombre: 'Área de UCI',
-            faldos: { historico: 36, habilitado: 40, entregado: 0, frecuencia: 'Semanal' },
-            botellones: { historico: 42, habilitado: 50, entregado: 0, frecuencia: 'Semanal' }
+            nombre: 'Unidad de Cuidados Intensivos (UCI)',
+            maxFardosMensual: 50,
+            maxBotellonesMensual: 60,
+            frecuencia: 'Mensual',
+            entregadoFardosPeriodo: 12,
+            entregadoBotellonesPeriodo: 18,
+            entregadoHoy: false
+          },
+          {
+            id: 'dept_emergencia',
+            nombre: 'Emergencia Pediátrica',
+            maxFardosMensual: 60,
+            maxBotellonesMensual: 70,
+            frecuencia: 'Mensual',
+            entregadoFardosPeriodo: 20,
+            entregadoBotellonesPeriodo: 25,
+            entregadoHoy: false
           },
           {
             id: 'dept_lab',
-            nombre: 'Laboratorio Clínico',
-            faldos: { historico: 24, habilitado: 28, entregado: 0, frecuencia: 'Quincenal' },
-            botellones: { historico: 30, habilitado: 35, entregado: 0, frecuencia: 'Quincenal' }
+            nombre: 'Laboratorio Clínico y Banco de Sangre',
+            maxFardosMensual: 30,
+            maxBotellonesMensual: 35,
+            frecuencia: 'Quincenal',
+            entregadoFardosPeriodo: 10,
+            entregadoBotellonesPeriodo: 12,
+            entregadoHoy: false
           },
           {
-            id: 'dept_may',
-            nombre: 'Mayordomía General',
-            faldos: { historico: 60, habilitado: 65, entregado: 0, frecuencia: 'Semanal' },
-            botellones: { historico: 72, habilitado: 80, entregado: 0, frecuencia: 'Semanal' }
+            id: 'dept_quirofano',
+            nombre: 'Quirófano Central',
+            maxFardosMensual: 45,
+            maxBotellonesMensual: 50,
+            frecuencia: 'Mensual',
+            entregadoFardosPeriodo: 15,
+            entregadoBotellonesPeriodo: 20,
+            entregadoHoy: false
           },
           {
-            id: 'dept_emerg',
-            nombre: 'Emergencia Pediátrica',
-            faldos: { historico: 44, habilitado: 50, entregado: 0, frecuencia: 'Semanal' },
-            botellones: { historico: 54, habilitado: 60, entregado: 0, frecuencia: 'Semanal' }
+            id: 'dept_mayordomia',
+            nombre: 'Mayordomía y Mantenimiento',
+            maxFardosMensual: 80,
+            maxBotellonesMensual: 90,
+            frecuencia: 'Semanal',
+            entregadoFardosPeriodo: 35,
+            entregadoBotellonesPeriodo: 40,
+            entregadoHoy: false
           }
         ];
         initialAreas.forEach((area) => {
           setDoc(doc(db, 'departamentos', area.id!), area);
         });
       } else {
-        const data: DepartamentoAgua[] = snapshot.docs.map((d) => ({
-          id: d.id,
-          ...(d.data() as Omit<DepartamentoAgua, 'id'>)
-        }));
+        const data: DepartamentoAgua[] = snapshot.docs.map((d) => {
+          const docData = d.data() as any;
+          // Compatibility mapping for legacy dept records
+          const maxFardos = docData.maxFardosMensual ?? docData.faldos?.habilitado ?? 40;
+          const maxBotellones = docData.maxBotellonesMensual ?? docData.botellones?.habilitado ?? 50;
+          const delivFardos = docData.entregadoFardosPeriodo ?? docData.faldos?.entregado ?? 0;
+          const delivBotellones = docData.entregadoBotellonesPeriodo ?? docData.botellones?.entregado ?? 0;
+
+          return {
+            id: d.id,
+            nombre: docData.nombre || 'Departamento',
+            maxFardosMensual: maxFardos,
+            maxBotellonesMensual: maxBotellones,
+            frecuencia: docData.frecuencia || docData.faldos?.frecuencia || 'Mensual',
+            entregadoFardosPeriodo: delivFardos,
+            entregadoBotellonesPeriodo: delivBotellones,
+            fechaUltimaEntrega: docData.fechaUltimaEntrega,
+            entregadoHoy: docData.entregadoHoy || false,
+            entregadoHoyDetalle: docData.entregadoHoyDetalle,
+            actualizadoEn: docData.actualizadoEn
+          };
+        });
         setDepartamentos(data);
       }
       setLoading(false);
     });
 
+    // 3. Water history listener
     const qHist = query(collection(db, 'historial_agua'), orderBy('creadoEn', 'desc'));
     const unsubHist = onSnapshot(qHist, (snapshot) => {
       const data: HistorialAgua[] = snapshot.docs.map((d) => ({
@@ -108,16 +227,187 @@ export const ControlAguaSection: React.FC<ControlAguaSectionProps> = ({
     });
 
     return () => {
+      unsubInv();
       unsubDept();
       unsubHist();
     };
   }, []);
 
-  const calcularCuotaTexto = (habilitado: number, frecuencia: string) => {
-    const sufijo = frecuencia === 'Semanal' ? '/ sem' : frecuencia === 'Quincenal' ? '/ quin' : '/ mes';
-    return `${habilitado} u. ${sufijo}`;
+  // Helpers
+  const getDeptStatus = (dept: DepartamentoAgua) => {
+    const fardosPct = dept.maxFardosMensual > 0 ? (dept.entregadoFardosPeriodo / dept.maxFardosMensual) * 100 : 0;
+    const botellonesPct = dept.maxBotellonesMensual > 0 ? (dept.entregadoBotellonesPeriodo / dept.maxBotellonesMensual) * 100 : 0;
+    const maxPct = Math.max(fardosPct, botellonesPct);
+
+    if (maxPct > 100) return { label: 'Excedido', color: 'bg-red-500/20 text-red-400 border-red-500/30' };
+    if (maxPct === 100) return { label: 'Límite Alcanzado', color: 'bg-orange-500/20 text-orange-400 border-orange-500/30' };
+    if (maxPct >= 80) return { label: 'Cerca del Límite', color: 'bg-amber-500/20 text-amber-400 border-amber-500/30' };
+    return { label: 'Normal', color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' };
   };
 
+  // Handle Update General Warehouse Inventory
+  const handleSaveInventarioGeneral = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await setDoc(doc(db, 'inventario_agua', 'general'), {
+        fardosDisponibles: editStockFardos >= 0 ? editStockFardos : 0,
+        botellonesDisponibles: editStockBotellones >= 0 ? editStockBotellones : 0,
+        actualizadoEn: new Date().toISOString(),
+        usuarioActualizacion: usuarioNombre || 'Almacén Central'
+      });
+      onShowToast('success', 'Inventario Actualizado', 'El stock general de agua en almacén fue guardado.');
+      setShowInventarioModal(false);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, 'inventario_agua/general');
+    }
+  };
+
+  // Open modal for Daily Delivery Checkbox
+  const handleOpenEntregaModal = (dept: DepartamentoAgua) => {
+    setSelectedDept(dept);
+    setEntregaFardos(1);
+    setEntregaBotellones(1);
+    setEntregaReceptor('');
+    setEntregaObservaciones('');
+    setShowEntregaHoyModal(true);
+  };
+
+  // Submit Daily Delivery (Updates Dept, Logs History & Deducts Warehouse Inventory)
+  const handleConfirmEntregaHoy = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedDept || !selectedDept.id) return;
+
+    if (entregaFardos <= 0 && entregaBotellones <= 0) {
+      onShowToast('error', 'Cantidad Inválida', 'Indica al menos 1 fardo o 1 botellón a entregar.');
+      return;
+    }
+
+    const now = new Date();
+    const fechaActual = now.toLocaleDateString('es-ES');
+    const horaActual = now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+
+    // Deduct stock from General Warehouse Inventory
+    const newFardosGeneral = Math.max(0, inventarioGeneral.fardosDisponibles - entregaFardos);
+    const newBotellonesGeneral = Math.max(0, inventarioGeneral.botellonesDisponibles - entregaBotellones);
+
+    try {
+      // 1. Update general warehouse stock
+      await setDoc(doc(db, 'inventario_agua', 'general'), {
+        fardosDisponibles: newFardosGeneral,
+        botellonesDisponibles: newBotellonesGeneral,
+        actualizadoEn: now.toISOString(),
+        usuarioActualizacion: usuarioNombre || 'Almacén Central'
+      });
+
+      // 2. Update department record
+      const updatedFardosPeriodo = (selectedDept.entregadoFardosPeriodo || 0) + entregaFardos;
+      const updatedBotellonesPeriodo = (selectedDept.entregadoBotellonesPeriodo || 0) + entregaBotellones;
+
+      const entregaDetalle = {
+        fecha: fechaActual,
+        hora: horaActual,
+        usuario: entregaResponsable || usuarioNombre || 'Almacén Central',
+        fardos: entregaFardos,
+        botellones: entregaBotellones,
+        receptor: entregaReceptor.trim() || 'Personal Autorizado',
+        observaciones: entregaObservaciones.trim()
+      };
+
+      await updateDoc(doc(db, 'departamentos', selectedDept.id), {
+        entregadoHoy: true,
+        fechaUltimaEntrega: `${fechaActual} ${horaActual}`,
+        entregadoHoyDetalle: entregaDetalle,
+        entregadoFardosPeriodo: updatedFardosPeriodo,
+        entregadoBotellonesPeriodo: updatedBotellonesPeriodo,
+        actualizadoEn: now.toISOString()
+      });
+
+      // 3. Log into History
+      const nextConsecutivo = (historial[0]?.idConsecutivo || 0) + 1;
+
+      if (entregaFardos > 0) {
+        const histFardos: Omit<HistorialAgua, 'id'> = {
+          idConsecutivo: nextConsecutivo,
+          fecha: fechaActual,
+          hora: horaActual,
+          departamento: selectedDept.nombre,
+          producto: 'Agua Purificada (Fardos)',
+          cantidad: entregaFardos,
+          habilitado: selectedDept.maxFardosMensual,
+          frecuencia: selectedDept.frecuencia,
+          cuota: `${selectedDept.maxFardosMensual} fardos / mes`,
+          pendiente: Math.max(0, selectedDept.maxFardosMensual - updatedFardosPeriodo),
+          responsable: entregaResponsable || usuarioNombre || 'Almacén Central',
+          receptor: entregaReceptor.trim() || 'Personal Autorizado',
+          creadoEn: now.toISOString()
+        };
+        await addDoc(collection(db, 'historial_agua'), histFardos);
+      }
+
+      if (entregaBotellones > 0) {
+        const histBotellones: Omit<HistorialAgua, 'id'> = {
+          idConsecutivo: nextConsecutivo + (entregaFardos > 0 ? 1 : 0),
+          fecha: fechaActual,
+          hora: horaActual,
+          departamento: selectedDept.nombre,
+          producto: 'Agua Purificada (Botellones)',
+          cantidad: entregaBotellones,
+          habilitado: selectedDept.maxBotellonesMensual,
+          frecuencia: selectedDept.frecuencia,
+          cuota: `${selectedDept.maxBotellonesMensual} botellones / mes`,
+          pendiente: Math.max(0, selectedDept.maxBotellonesMensual - updatedBotellonesPeriodo),
+          responsable: entregaResponsable || usuarioNombre || 'Almacén Central',
+          receptor: entregaReceptor.trim() || 'Personal Autorizado',
+          creadoEn: now.toISOString()
+        };
+        await addDoc(collection(db, 'historial_agua'), histBotellones);
+      }
+
+      onShowToast(
+        'success',
+        'Entrega Registrada y Descontada',
+        `Se entregó a ${selectedDept.nombre}. Descontados ${entregaFardos} fardos y ${entregaBotellones} botellones del inventario general.`
+      );
+      setShowEntregaHoyModal(false);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, `departamentos/${selectedDept.id}`);
+    }
+  };
+
+  // Toggle OFF "Agua entregada hoy"
+  const handleToggleOffEntregaHoy = async (dept: DepartamentoAgua) => {
+    if (!dept.id) return;
+    try {
+      await updateDoc(doc(db, 'departamentos', dept.id), {
+        entregadoHoy: false,
+        actualizadoEn: new Date().toISOString()
+      });
+      onShowToast('info', 'Estado Actualizado', `Se desmarcó la entrega del día de ${dept.nombre}.`);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `departamentos/${dept.id}`);
+    }
+  };
+
+  // Reset Period Deliveries for all departments (Nuevo período mensual/semanal)
+  const handleResetearPeriodo = async () => {
+    try {
+      const promises = departamentos.map((d) => {
+        if (!d.id) return Promise.resolve();
+        return updateDoc(doc(db, 'departamentos', d.id), {
+          entregadoFardosPeriodo: 0,
+          entregadoBotellonesPeriodo: 0,
+          entregadoHoy: false,
+          actualizadoEn: new Date().toISOString()
+        });
+      });
+      await Promise.all(promises);
+      onShowToast('success', 'Período Reiniciado', 'Se reiniciaron los contadores de consumo para todos los departamentos.');
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, 'departamentos');
+    }
+  };
+
+  // Add new department
   const handleAddDept = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newDeptNombre.trim()) return;
@@ -126,14 +416,18 @@ export const ControlAguaSection: React.FC<ControlAguaSectionProps> = ({
     const newDept: DepartamentoAgua = {
       id: newId,
       nombre: newDeptNombre.trim(),
-      faldos: { historico: 0, habilitado: newFaldosHab, entregado: 0, frecuencia: newFaldosFrec },
-      botellones: { historico: 0, habilitado: newBotellonesHab, entregado: 0, frecuencia: newBotellonesFrec },
+      maxFardosMensual: newMaxFardos,
+      maxBotellonesMensual: newMaxBotellones,
+      frecuencia: newFrecuencia,
+      entregadoFardosPeriodo: 0,
+      entregadoBotellonesPeriodo: 0,
+      entregadoHoy: false,
       actualizadoEn: new Date().toISOString()
     };
 
     try {
       await setDoc(doc(db, 'departamentos', newId), newDept);
-      onShowToast('success', 'Área Agregada', `Se creó el departamento ${newDept.nombre}.`);
+      onShowToast('success', 'Departamento Creado', `Se configuró el consumo para ${newDept.nombre}.`);
       setShowAddDeptModal(false);
       setNewDeptNombre('');
     } catch (err) {
@@ -141,445 +435,608 @@ export const ControlAguaSection: React.FC<ControlAguaSectionProps> = ({
     }
   };
 
-  const handleOpenEdit = (dept: DepartamentoAgua) => {
-    setEditingDept({ ...dept });
-    setShowEditDeptModal(true);
-  };
-
+  // Save edit department
   const handleUpdateDept = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingDept || !editingDept.id) return;
 
     try {
-      await setDoc(doc(db, 'departamentos', editingDept.id), {
-        ...editingDept,
+      await updateDoc(doc(db, 'departamentos', editingDept.id), {
+        nombre: editingDept.nombre,
+        maxFardosMensual: editingDept.maxFardosMensual,
+        maxBotellonesMensual: editingDept.maxBotellonesMensual,
+        frecuencia: editingDept.frecuencia,
         actualizadoEn: new Date().toISOString()
       });
-      onShowToast('info', 'Área Actualizada', `Se guardaron las cuotas para ${editingDept.nombre}.`);
+      onShowToast('success', 'Configuración Guardada', `Se actualizaron los límites de ${editingDept.nombre}.`);
       setShowEditDeptModal(false);
+      setEditingDept(null);
     } catch (err) {
-      handleFirestoreError(err, OperationType.WRITE, `departamentos/${editingDept.id}`);
+      handleFirestoreError(err, OperationType.UPDATE, `departamentos/${editingDept.id}`);
     }
   };
 
-  const handleEntregaParcial = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (selectedDeptIndex === null || !departamentos[selectedDeptIndex]) return;
-
-    const dept = departamentos[selectedDeptIndex];
-    const tipo = activeTab === 'faldos' ? 'faldos' : 'botellones';
-    const inv = dept[tipo];
-    const pend = Math.max(0, inv.habilitado - inv.entregado);
-
-    if (entregaCantidad <= 0 || entregaCantidad > pend) {
-      onShowToast('error', 'Cantidad Inválida', `Ingresa un valor entre 1 y ${pend}.`);
-      return;
-    }
-
-    const nuevoEntregado = inv.entregado + entregaCantidad;
-    const nuevoPendiente = Math.max(0, inv.habilitado - nuevoEntregado);
-
-    const now = new Date();
-    const noDoc = historial.length + 1;
-    const productoLabel = tipo === 'faldos' ? 'Faldos de Agua' : 'Botellones de Agua';
-
-    const nuevoHistorial: Omit<HistorialAgua, 'id'> = {
-      idConsecutivo: noDoc,
-      fecha: now.toLocaleDateString('es-ES'),
-      hora: now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }),
-      departamento: dept.nombre,
-      producto: productoLabel,
-      cantidad: entregaCantidad,
-      habilitado: inv.habilitado,
-      frecuencia: inv.frecuencia,
-      cuota: calcularCuotaTexto(inv.habilitado, inv.frecuencia),
-      pendiente: nuevoPendiente,
-      responsable: entregaResponsable || usuarioNombre || 'Almacén Central',
-      receptor: entregaReceptor || 'Área Receptora',
-      creadoEn: now.toISOString()
-    };
-
-    try {
-      // Update department delivered amount in Firestore
-      const updatedDept = {
-        ...dept,
-        [tipo]: {
-          ...inv,
-          entregado: nuevoEntregado
-        }
-      };
-      await setDoc(doc(db, 'departamentos', dept.id!), updatedDept);
-      await addDoc(collection(db, 'historial_agua'), nuevoHistorial);
-
-      onShowToast('success', 'Entrega Confirmada', `Se entregaron ${entregaCantidad} unidades a ${dept.nombre}.`);
-      setShowEntregaModal(false);
-      setEntregaCantidad(1);
-      setEntregaReceptor('');
-    } catch (err) {
-      handleFirestoreError(err, OperationType.WRITE, 'historial_agua');
-    }
-  };
-
+  // Delete department
   const handleConfirmDeleteDept = async () => {
     if (!deptAEliminar || !deptAEliminar.id) return;
     setDeleting(true);
     try {
       await deleteDoc(doc(db, 'departamentos', deptAEliminar.id));
-      onShowToast('success', 'Área Eliminada', `Se eliminó el departamento ${deptAEliminar.nombre} de Firestore.`);
+      onShowToast('success', 'Departamento Eliminado', `Se eliminó el departamento ${deptAEliminar.nombre}.`);
       setDeptAEliminar(null);
     } catch (err) {
       handleFirestoreError(err, OperationType.DELETE, `departamentos/${deptAEliminar.id}`);
-      onShowToast('error', 'Error', 'No se pudo eliminar el departamento.');
     } finally {
       setDeleting(false);
     }
   };
 
-  const handleConfirmDeleteHistorial = async () => {
-    if (!historialAEliminar) return;
-    setDeleting(true);
-    try {
-      await deleteDoc(doc(db, 'historial_agua', historialAEliminar.id));
-      onShowToast('success', 'Eliminado', `Registro #${historialAEliminar.idConsecutivo} eliminado de Firestore.`);
-      setHistorialAEliminar(null);
-    } catch (err) {
-      handleFirestoreError(err, OperationType.DELETE, `historial_agua/${historialAEliminar.id}`);
-      onShowToast('error', 'Error', 'No se pudo eliminar el registro.');
-    } finally {
-      setDeleting(false);
-    }
-  };
+  // Filtered lists
+  const filteredDeptos = departamentos.filter((d) =>
+    d.nombre.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
-  const selectedDept = selectedDeptIndex !== null ? departamentos[selectedDeptIndex] : null;
+  const entregasHoyList = departamentos.filter((d) => d.entregadoHoy === true);
+
+  // Totals for today
+  const totalFardosEntregadosHoy = entregasHoyList.reduce(
+    (acc, d) => acc + (d.entregadoHoyDetalle?.fardos || 0),
+    0
+  );
+  const totalBotellonesEntregadosHoy = entregasHoyList.reduce(
+    (acc, d) => acc + (d.entregadoHoyDetalle?.botellones || 0),
+    0
+  );
 
   return (
-    <div className="bg-gray-900 rounded-2xl border border-gray-800 p-5 shadow-xl space-y-4">
-      {/* Header */}
-      <div className="flex justify-between items-start flex-wrap gap-3 border-b border-gray-800 pb-4">
+    <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4 sm:p-6 shadow-2xl space-y-6">
+      {/* Module Title Header */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-800 pb-4">
         <div>
-          <h2 className="text-base font-bold text-white flex items-center gap-2">
-            <Droplet className="text-cyan-400 w-5 h-5" />
-            Monitoreo e Inventario de Agua Purificada
+          <h2 className="text-lg font-bold text-white flex items-center gap-2">
+            <Droplets className="w-5 h-5 text-cyan-400 animate-pulse" />
+            Monitoreo e Inventario General de Agua Purificada
           </h2>
-          <p className="text-xs text-gray-400 mt-0.5">Control independiente de Faldos y Botellones por departamento con cuota automática</p>
+          <p className="text-xs text-gray-400 mt-1">
+            Planificación de consumo mensual, entregas del día con descuento automático y stock físico en almacén.
+          </p>
         </div>
-        <div className="flex gap-2 flex-wrap">
-          {activeTab === 'historial' && (
-            <>
-              <button
-                onClick={() => {
-                  onSolicitarDestino('Exportar Historial de Agua a PDF', (destData) => {
-                    generarPDFHistorialAgua(historial, destData);
-                    onShowToast('success', 'PDF Generado', 'Se exportó el historial de entregas de agua a PDF.');
-                  });
-                }}
-                className="bg-cyan-950 hover:bg-cyan-900 border border-cyan-800 text-cyan-300 px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer"
-              >
-                <Printer className="w-4 h-4" /> PDF Historial
-              </button>
-              <button
-                onClick={async () => {
-                  onSolicitarDestino('Exportar Historial de Agua a Word (.docx)', async (destData) => {
-                    await generarDOCXHistorialAgua(historial, destData);
-                    onShowToast('success', 'Word Generado', 'Se exportó el historial de entregas de agua a Word (.docx).');
-                  });
-                }}
-                className="bg-blue-950 hover:bg-blue-900 border border-blue-800 text-blue-300 px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer"
-              >
-                <Download className="w-4 h-4" /> Word Historial
-              </button>
-            </>
-          )}
+
+        <div className="flex items-center gap-2 flex-wrap">
           <button
             onClick={() => setShowAddDeptModal(true)}
-            className="bg-cyan-950 hover:bg-cyan-900 border border-cyan-800 text-cyan-300 px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer"
+            className="bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-semibold px-3.5 py-2 rounded-xl flex items-center gap-1.5 shadow-md transition-all cursor-pointer"
           >
-            <Plus className="w-4 h-4" /> Agregar Área
+            <Plus className="w-4 h-4" /> Configurar Departamento
+          </button>
+
+          <button
+            onClick={() => setShowInventarioModal(true)}
+            className="bg-gray-800 hover:bg-gray-700 border border-gray-700 text-cyan-300 text-xs font-semibold px-3.5 py-2 rounded-xl flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+          >
+            <Boxes className="w-4 h-4 text-cyan-400" /> Ajustar Stock Físico
           </button>
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-2 border-b border-gray-800 pb-2 font-semibold text-xs">
+      {/* General Warehouse Inventory Card Panel */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="bg-gradient-to-br from-cyan-950/80 to-gray-900 border border-cyan-800/40 p-4 rounded-2xl shadow-lg relative overflow-hidden group">
+          <div className="flex justify-between items-start">
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-wider text-cyan-400">Fardos en Almacén</p>
+              <p className="text-2xl font-black text-white font-mono mt-1">
+                {inventarioGeneral.fardosDisponibles} <span className="text-xs font-normal text-cyan-300">fardos</span>
+              </p>
+            </div>
+            <div className="p-2.5 rounded-xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-400">
+              <Package className="w-6 h-6" />
+            </div>
+          </div>
+          <div className="mt-3 flex items-center justify-between text-[11px] text-gray-400">
+            <span>Stock disponible físico</span>
+            <span
+              className={`px-2 py-0.5 rounded-full font-semibold ${
+                inventarioGeneral.fardosDisponibles > 50
+                  ? 'bg-emerald-500/20 text-emerald-300'
+                  : 'bg-red-500/20 text-red-300'
+              }`}
+            >
+              {inventarioGeneral.fardosDisponibles > 50 ? 'Stock OK' : 'Stock Bajo'}
+            </span>
+          </div>
+        </div>
+
+        <div className="bg-gradient-to-br from-blue-950/80 to-gray-900 border border-blue-800/40 p-4 rounded-2xl shadow-lg relative overflow-hidden group">
+          <div className="flex justify-between items-start">
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-wider text-blue-400">Botellones en Almacén</p>
+              <p className="text-2xl font-black text-white font-mono mt-1">
+                {inventarioGeneral.botellonesDisponibles} <span className="text-xs font-normal text-blue-300">bot.</span>
+              </p>
+            </div>
+            <div className="p-2.5 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-400">
+              <Droplet className="w-6 h-6" />
+            </div>
+          </div>
+          <div className="mt-3 flex items-center justify-between text-[11px] text-gray-400">
+            <span>Stock disponible físico</span>
+            <span
+              className={`px-2 py-0.5 rounded-full font-semibold ${
+                inventarioGeneral.botellonesDisponibles > 30
+                  ? 'bg-emerald-500/20 text-emerald-300'
+                  : 'bg-red-500/20 text-red-300'
+              }`}
+            >
+              {inventarioGeneral.botellonesDisponibles > 30 ? 'Stock OK' : 'Stock Bajo'}
+            </span>
+          </div>
+        </div>
+
+        <div className="bg-gray-950 border border-gray-800 p-4 rounded-2xl shadow-lg flex flex-col justify-between">
+          <div className="flex justify-between items-start">
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-wider text-emerald-400">Entregado Hoy</p>
+              <p className="text-xl font-bold text-white font-mono mt-1">
+                {totalFardosEntregadosHoy} <span className="text-xs text-gray-400 font-normal">fardos</span> /{' '}
+                {totalBotellonesEntregadosHoy} <span className="text-xs text-gray-400 font-normal font-mono">bot.</span>
+              </p>
+            </div>
+            <div className="p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
+              <CheckCircle2 className="w-5 h-5" />
+            </div>
+          </div>
+          <p className="text-[10px] text-gray-500 mt-2">
+            {entregasHoyList.length} de {departamentos.length} departamentos atendidos hoy
+          </p>
+        </div>
+
+        <div className="bg-gray-950 border border-gray-800 p-4 rounded-2xl shadow-lg flex flex-col justify-between">
+          <div className="flex justify-between items-start">
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-wider text-purple-400">Período Activo</p>
+              <p className="text-sm font-bold text-white mt-1">Plan Mensual / Semanal</p>
+            </div>
+            <button
+              onClick={handleResetearPeriodo}
+              className="p-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 transition-colors cursor-pointer"
+              title="Reiniciar acumulados del período"
+            >
+              <RefreshCw className="w-4 h-4 text-cyan-400" />
+            </button>
+          </div>
+          <p className="text-[10px] text-gray-400 mt-2">
+            Descuento automático en almacén al marcar entrega
+          </p>
+        </div>
+      </div>
+
+      {/* Tabs Navigation */}
+      <div className="flex items-center gap-2 border-b border-gray-800 pb-2 overflow-x-auto custom-scrollbar">
         <button
-          onClick={() => { setActiveTab('faldos'); setSelectedDeptIndex(0); }}
-          className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 cursor-pointer transition-all ${
-            activeTab === 'faldos' ? 'bg-cyan-600 text-white shadow' : 'bg-gray-950 text-gray-400 hover:text-white'
+          onClick={() => setActiveTab('planificacion')}
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+            activeTab === 'planificacion'
+              ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-md'
+              : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
           }`}
         >
-          <Package className="w-4 h-4" /> Faldos de Agua
+          <Building2 className="w-4 h-4" /> Planificación de Consumo ({departamentos.length})
         </button>
+
         <button
-          onClick={() => { setActiveTab('botellones'); setSelectedDeptIndex(0); }}
-          className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 cursor-pointer transition-all ${
-            activeTab === 'botellones' ? 'bg-blue-600 text-white shadow' : 'bg-gray-950 text-gray-400 hover:text-white'
+          onClick={() => setActiveTab('entregas_dia')}
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+            activeTab === 'entregas_dia'
+              ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-md'
+              : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
           }`}
         >
-          <Droplets className="w-4 h-4" /> Botellones
+          <CheckSquare className="w-4 h-4" /> Entregas del Día ({entregasHoyList.length})
         </button>
+
         <button
           onClick={() => setActiveTab('historial')}
-          className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 cursor-pointer transition-all ${
-            activeTab === 'historial' ? 'bg-purple-600 text-white shadow' : 'bg-gray-950 text-gray-400 hover:text-white'
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+            activeTab === 'historial'
+              ? 'bg-purple-500/20 text-purple-300 border border-purple-500/40 shadow-md'
+              : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
           }`}
         >
-          <History className="w-4 h-4" /> Historial de Entregas
+          <History className="w-4 h-4" /> Historial de Entregas ({historial.length})
         </button>
       </div>
 
-      {/* Active Tab Panel */}
-      {activeTab !== 'historial' ? (
+      {/* TAB 1: PLANIFICACIÓN POR DEPARTAMENTOS */}
+      {activeTab === 'planificacion' && (
         <div className="space-y-4">
-          <div className="overflow-x-auto rounded-xl border border-gray-800 bg-gray-950/60 custom-scrollbar">
-            <table className="w-full text-left text-xs border-collapse">
-              <thead>
-                <tr className="bg-gray-900 text-gray-400 border-b border-gray-800 uppercase font-mono text-[10px]">
-                  <th className="p-3">Departamento</th>
-                  <th className="p-3 text-center">Cons. Histórico</th>
-                  <th className="p-3 text-center">Habilitado</th>
-                  <th className="p-3 text-center">Frecuencia</th>
-                  <th className="p-3 text-center">Cuota Asignada</th>
-                  <th className="p-3 text-center">Entregado</th>
-                  <th className="p-3 text-center">Pendiente</th>
-                  <th className="p-3 text-right">Acciones</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-800/60">
-                {departamentos.map((dept, idx) => {
-                  const inv = activeTab === 'faldos' ? dept.faldos : dept.botellones;
-                  const pend = Math.max(0, inv.habilitado - inv.entregado);
-                  const isSelected = selectedDeptIndex === idx;
-
-                  return (
-                    <tr
-                      key={dept.id || idx}
-                      onClick={() => setSelectedDeptIndex(idx)}
-                      className={`cursor-pointer transition-colors ${
-                        isSelected ? 'bg-cyan-950/40 border-l-4 border-cyan-500' : 'hover:bg-gray-800/40'
-                      }`}
-                    >
-                      <td className="p-3 font-bold text-white">{dept.nombre}</td>
-                      <td className="p-3 text-center text-gray-400">{inv.historico || 0}</td>
-                      <td className="p-3 text-center text-cyan-400 font-bold">{inv.habilitado}</td>
-                      <td className="p-3 text-center">
-                        <span className="bg-gray-800 text-gray-300 text-[10px] px-2 py-0.5 rounded-full border border-gray-700">
-                          {inv.frecuencia}
-                        </span>
-                      </td>
-                      <td className="p-3 text-center text-amber-400 font-mono">
-                        {calcularCuotaTexto(inv.habilitado, inv.frecuencia)}
-                      </td>
-                      <td className="p-3 text-center text-amber-400 font-bold">{inv.entregado}</td>
-                      <td className={`p-3 text-center font-bold ${pend > 0 ? 'text-emerald-400' : 'text-gray-500'}`}>
-                        {pend}
-                      </td>
-                      <td className="p-3 text-right">
-                        <div className="flex items-center justify-end gap-1.5">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleOpenEdit(dept);
-                            }}
-                            className="bg-gray-800 hover:bg-cyan-700 text-gray-300 hover:text-white px-2 py-1 rounded-lg text-[11px] inline-flex items-center gap-1 transition-all cursor-pointer border border-gray-700"
-                            title="Editar cuota"
-                          >
-                            <Settings2 className="w-3.5 h-3.5" /> Editar
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setDeptAEliminar(dept);
-                            }}
-                            className="bg-gray-800 hover:bg-red-950/60 text-gray-400 hover:text-red-400 border border-gray-700 p-1 rounded-lg transition-all cursor-pointer"
-                            title="Eliminar departamento"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+            <div className="relative w-full sm:w-80">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Buscar departamento..."
+                className="w-full bg-gray-950 border border-gray-800 rounded-xl pl-9 pr-3 py-2 text-xs text-white placeholder-gray-500 outline-none focus:border-cyan-500"
+              />
+            </div>
+            <p className="text-xs text-gray-400 font-mono">
+              Marcador <span className="text-cyan-400 font-bold">"Agua entregada hoy"</span> descuenta stock físico automáticamente
+            </p>
           </div>
 
-          {/* Detailed area panel */}
-          {selectedDept && (
-            <div className="bg-gray-950 border border-gray-800 rounded-xl p-4 space-y-3">
-              <div className="flex justify-between items-center flex-wrap gap-2 border-b border-gray-800 pb-2">
-                <span className="text-xs font-bold text-cyan-400 font-mono tracking-wide">
-                  {selectedDept.nombre.toUpperCase()} — PENDIENTE:{' '}
-                  {Math.max(
-                    0,
-                    (activeTab === 'faldos' ? selectedDept.faldos : selectedDept.botellones).habilitado -
-                      (activeTab === 'faldos' ? selectedDept.faldos : selectedDept.botellones).entregado
-                  )}{' '}
-                  UNIDADES
-                </span>
-                <button
-                  onClick={() => setShowEntregaModal(true)}
-                  className="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-1.5 px-3 rounded-lg text-xs flex items-center gap-1.5 shadow-md cursor-pointer transition-all"
-                >
-                  <Send className="w-3.5 h-3.5" /> Registrar Entrega Parcial
-                </button>
-              </div>
+          {loading ? (
+            <div className="p-10 text-center text-xs text-gray-400 flex flex-col items-center justify-center gap-2">
+              <div className="w-6 h-6 border-2 border-cyan-500 border-t-transparent rounded-full animate-spin"></div>
+              Cargando departamentos y consumo de agua...
+            </div>
+          ) : filteredDeptos.length === 0 ? (
+            <div className="p-10 text-center text-xs text-gray-500 italic bg-gray-950 rounded-2xl border border-gray-800">
+              No hay departamentos configurados con ese nombre.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {filteredDeptos.map((dept) => {
+                const status = getDeptStatus(dept);
+                const restanteFardos = Math.max(0, dept.maxFardosMensual - dept.entregadoFardosPeriodo);
+                const restanteBotellones = Math.max(0, dept.maxBotellonesMensual - dept.entregadoBotellonesPeriodo);
 
-              {/* Progress Bar */}
-              {(() => {
-                const inv = activeTab === 'faldos' ? selectedDept.faldos : selectedDept.botellones;
-                const pct = inv.habilitado > 0 ? Math.min(100, Math.round((inv.entregado / inv.habilitado) * 100)) : 0;
                 return (
-                  <div className="space-y-1">
-                    <div className="flex justify-between text-xs text-gray-400">
-                      <span>Progreso de distribución de la cuota:</span>
-                      <span className="font-mono text-cyan-400 font-bold">{pct}% entregado</span>
+                  <div
+                    key={dept.id}
+                    className={`bg-gray-950 border rounded-2xl p-4 space-y-3 transition-all relative group ${
+                      dept.entregadoHoy
+                        ? 'border-emerald-500/50 bg-emerald-950/10'
+                        : 'border-gray-800 hover:border-cyan-500/40'
+                    }`}
+                  >
+                    {/* Header Card */}
+                    <div className="flex justify-between items-start gap-2 border-b border-gray-800/80 pb-2.5">
+                      <div>
+                        <h3 className="font-bold text-white text-sm line-clamp-1">{dept.nombre}</h3>
+                        <p className="text-[10px] text-gray-400 mt-0.5 flex items-center gap-1">
+                          <span>Frecuencia: {dept.frecuencia}</span>
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-1">
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${status.color}`}>
+                          {status.label}
+                        </span>
+                        <button
+                          onClick={() => {
+                            setEditingDept({ ...dept });
+                            setShowEditDeptModal(true);
+                          }}
+                          className="p-1 text-gray-400 hover:text-white rounded-lg hover:bg-gray-800 transition-colors"
+                          title="Editar cuotas"
+                        >
+                          <Settings2 className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => setDeptAEliminar(dept)}
+                          className="p-1 text-red-400 hover:text-red-300 rounded-lg hover:bg-red-500/10 transition-colors"
+                          title="Eliminar departamento"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </div>
-                    <div className="w-full bg-gray-900 rounded-full h-2.5 border border-gray-800 overflow-hidden">
-                      <div
-                        className="h-full bg-gradient-to-r from-cyan-500 to-emerald-500 transition-all duration-500"
-                        style={{ width: `${pct}%` }}
-                      ></div>
+
+                    {/* Fardos Consumption Bar */}
+                    <div className="space-y-1">
+                      <div className="flex justify-between items-center text-[11px]">
+                        <span className="text-gray-300 font-semibold flex items-center gap-1">
+                          <Package className="w-3.5 h-3.5 text-cyan-400" /> Fardos:
+                        </span>
+                        <span className="font-mono text-white">
+                          <strong className="text-cyan-400">{dept.entregadoFardosPeriodo}</strong> / {dept.maxFardosMensual} fardos
+                        </span>
+                      </div>
+                      <div className="w-full bg-gray-900 h-2 rounded-full overflow-hidden border border-gray-800">
+                        <div
+                          className="bg-cyan-500 h-full rounded-full transition-all"
+                          style={{
+                            width: `${Math.min(
+                              100,
+                              dept.maxFardosMensual > 0 ? (dept.entregadoFardosPeriodo / dept.maxFardosMensual) * 100 : 0
+                            )}%`
+                          }}
+                        ></div>
+                      </div>
+                      <p className="text-[10px] text-gray-500 text-right">
+                        Disponible en cuota: {restanteFardos} fardos
+                      </p>
+                    </div>
+
+                    {/* Botellones Consumption Bar */}
+                    <div className="space-y-1">
+                      <div className="flex justify-between items-center text-[11px]">
+                        <span className="text-gray-300 font-semibold flex items-center gap-1">
+                          <Droplet className="w-3.5 h-3.5 text-blue-400" /> Botellones:
+                        </span>
+                        <span className="font-mono text-white">
+                          <strong className="text-blue-400">{dept.entregadoBotellonesPeriodo}</strong> / {dept.maxBotellonesMensual} bot.
+                        </span>
+                      </div>
+                      <div className="w-full bg-gray-900 h-2 rounded-full overflow-hidden border border-gray-800">
+                        <div
+                          className="bg-blue-500 h-full rounded-full transition-all"
+                          style={{
+                            width: `${Math.min(
+                              100,
+                              dept.maxBotellonesMensual > 0
+                                ? (dept.entregadoBotellonesPeriodo / dept.maxBotellonesMensual) * 100
+                                : 0
+                            )}%`
+                          }}
+                        ></div>
+                      </div>
+                      <p className="text-[10px] text-gray-500 text-right">
+                        Disponible en cuota: {restanteBotellones} botellones
+                      </p>
+                    </div>
+
+                    {/* Daily Delivery Checkbox Footer */}
+                    <div className="border-t border-gray-800/80 pt-3 flex items-center justify-between">
+                      {dept.entregadoHoy ? (
+                        <div className="flex items-center justify-between w-full">
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => handleToggleOffEntregaHoy(dept)}
+                              className="text-emerald-400 hover:text-emerald-300 flex items-center gap-1.5 cursor-pointer text-xs font-bold"
+                            >
+                              <CheckSquare className="w-4 h-4" /> Agua Entregada Hoy
+                            </button>
+                          </div>
+                          <span className="text-[10px] text-emerald-400/80 font-mono">
+                            {dept.entregadoHoyDetalle?.fardos || 0} fardos / {dept.entregadoHoyDetalle?.botellones || 0} bot.
+                          </span>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => handleOpenEntregaModal(dept)}
+                          className="text-gray-400 hover:text-cyan-300 flex items-center gap-1.5 cursor-pointer text-xs font-semibold group/btn"
+                        >
+                          <Square className="w-4 h-4 text-gray-500 group-hover/btn:text-cyan-400" />
+                          Marcar "Agua entregada hoy"
+                        </button>
+                      )}
                     </div>
                   </div>
                 );
-              })()}
+              })}
             </div>
           )}
         </div>
-      ) : (
-        /* Historial tab */
-        <div className="overflow-y-auto max-h-80 rounded-xl border border-gray-800 bg-gray-950/60 custom-scrollbar">
-          <table className="w-full text-left text-xs border-collapse">
-            <thead>
-              <tr className="bg-gray-900 text-gray-400 border-b border-gray-800 uppercase font-mono text-[10px] sticky top-0">
-                <th className="p-3"># Doc</th>
-                <th className="p-3">Fecha / Hora</th>
-                <th className="p-3">Departamento</th>
-                <th className="p-3">Producto</th>
-                <th className="p-3 text-center">Entregado</th>
-                <th className="p-3 text-center">Pendiente</th>
-                <th className="p-3">Entregó</th>
-                <th className="p-3">Recibió</th>
-                <th className="p-3 text-right">Acciones</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-800/40">
-              {historial.map((r) => (
-                <tr key={r.id} className="hover:bg-gray-800/40">
-                  <td className="p-3 font-mono text-cyan-400 font-bold">#{String(r.idConsecutivo).padStart(4, '0')}</td>
-                  <td className="p-3 text-gray-400">
-                    {r.fecha} <span className="text-[10px] text-gray-500">{r.hora}</span>
-                  </td>
-                  <td className="p-3 font-bold text-white">{r.departamento}</td>
-                  <td className="p-3 text-blue-400">{r.producto}</td>
-                  <td className="p-3 text-center text-emerald-400 font-bold">{r.cantidad} u.</td>
-                  <td className="p-3 text-center text-amber-400">{r.pendiente} u.</td>
-                  <td className="p-3 text-gray-400">{r.responsable}</td>
-                  <td className="p-3 text-gray-400">{r.receptor}</td>
-                  <td className="p-3 text-right">
-                    <div className="flex items-center justify-end gap-1.5">
-                      <button
-                        onClick={() => {
-                          onSolicitarDestino(`Exportar Registro Agua #${r.idConsecutivo}`, (destData) => {
-                            generarPDFRegistroAgua(r, destData);
-                            onShowToast('success', 'PDF Generado', `Comprobante de entrega #${r.idConsecutivo} generado en PDF.`);
-                          });
-                        }}
-                        className="bg-gray-800 hover:bg-cyan-900 text-cyan-400 px-2 py-1 rounded-lg text-[11px] font-semibold flex items-center gap-1 transition-all cursor-pointer border border-gray-700"
-                        title="Exportar a PDF"
-                      >
-                        <Printer className="w-3.5 h-3.5" /> PDF
-                      </button>
-                      <button
-                        onClick={async () => {
-                          onSolicitarDestino(`Exportar Word Registro Agua #${r.idConsecutivo}`, async (destData) => {
-                            await generarDOCXRegistroAgua(r, destData);
-                            onShowToast('success', 'Word Generado', `Comprobante de entrega #${r.idConsecutivo} generado en Word.`);
-                          });
-                        }}
-                        className="bg-gray-800 hover:bg-blue-900 text-blue-400 px-2 py-1 rounded-lg text-[11px] font-semibold flex items-center gap-1 transition-all cursor-pointer border border-gray-700"
-                        title="Exportar a Word (.docx)"
-                      >
-                        <Download className="w-3.5 h-3.5" /> Word
-                      </button>
-                      <button
-                        onClick={() => {
-                          if (r.id) {
-                            setHistorialAEliminar({ id: r.id, idConsecutivo: r.idConsecutivo });
-                          }
-                        }}
-                        className="bg-gray-800 hover:bg-red-950/60 text-gray-400 hover:text-red-400 border border-gray-700 p-1 rounded-lg transition-all cursor-pointer"
-                        title="Eliminar registro de entrega"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      )}
+
+      {/* TAB 2: ENTREGAS DEL DÍA */}
+      {activeTab === 'entregas_dia' && (
+        <div className="space-y-4">
+          <div className="bg-gray-950 border border-gray-800 p-4 rounded-2xl flex flex-col md:flex-row items-center justify-between gap-4">
+            <div>
+              <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                <CheckSquare className="w-4 h-4 text-emerald-400" /> Resumen de Entregas de Agua del Día
+              </h3>
+              <p className="text-xs text-gray-400 mt-0.5">
+                Departamentos registrados con suministros entregados hoy.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <label className="text-xs text-gray-400 flex items-center gap-1">
+                <Calendar className="w-4 h-4 text-gray-500" /> Fecha:
+              </label>
+              <input
+                type="date"
+                value={dateFilter}
+                onChange={(e) => setDateFilter(e.target.value)}
+                className="bg-gray-900 border border-gray-800 rounded-xl px-3 py-1.5 text-xs text-white outline-none focus:border-cyan-500"
+              />
+            </div>
+          </div>
+
+          {entregasHoyList.length === 0 ? (
+            <div className="p-12 text-center text-xs text-gray-500 italic bg-gray-950 rounded-2xl border border-gray-800 flex flex-col items-center justify-center gap-2">
+              <Droplet className="w-8 h-8 text-gray-600" />
+              No hay entregas registradas hoy todavía. Haz clic en "Marcar Agua entregada hoy" en el listado de departamentos.
+            </div>
+          ) : (
+            <div className="overflow-x-auto rounded-xl border border-gray-800 bg-gray-950 custom-scrollbar">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="bg-gray-900 text-gray-400 border-b border-gray-800 uppercase font-mono text-[10px]">
+                    <th className="p-3">Departamento</th>
+                    <th className="p-3">Hora Entrega</th>
+                    <th className="p-3">Fardos</th>
+                    <th className="p-3">Botellones</th>
+                    <th className="p-3">Recibido por</th>
+                    <th className="p-3">Entregado por</th>
+                    <th className="p-3 text-right">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-800/60">
+                  {entregasHoyList.map((dept) => (
+                    <tr key={dept.id} className="hover:bg-gray-800/40 transition-colors">
+                      <td className="p-3 font-bold text-white flex items-center gap-2">
+                        <Building2 className="w-4 h-4 text-cyan-400" />
+                        {dept.nombre}
+                      </td>
+                      <td className="p-3 text-gray-300 font-mono">
+                        {dept.entregadoHoyDetalle?.hora || 'Hoy'}
+                      </td>
+                      <td className="p-3 font-bold text-cyan-400 font-mono">
+                        {dept.entregadoHoyDetalle?.fardos || 0} fardos
+                      </td>
+                      <td className="p-3 font-bold text-blue-400 font-mono">
+                        {dept.entregadoHoyDetalle?.botellones || 0} bot.
+                      </td>
+                      <td className="p-3 text-gray-300">
+                        {dept.entregadoHoyDetalle?.receptor || 'Personal Autorizado'}
+                      </td>
+                      <td className="p-3 text-gray-400">
+                        {dept.entregadoHoyDetalle?.usuario || usuarioNombre}
+                      </td>
+                      <td className="p-3 text-right">
+                        <button
+                          onClick={() => handleToggleOffEntregaHoy(dept)}
+                          className="bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 text-[11px] font-semibold px-2.5 py-1 rounded-lg transition-colors cursor-pointer"
+                        >
+                          Desmarcar
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
 
-      {/* Modal Delivery */}
-      {showEntregaModal && selectedDept && (
+      {/* TAB 3: HISTORIAL DE ENTREGAS */}
+      {activeTab === 'historial' && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between border-b border-gray-800 pb-2">
+            <h3 className="text-sm font-bold text-white flex items-center gap-2">
+              <History className="w-4 h-4 text-purple-400" /> Historial de Entregas Registradas ({historial.length})
+            </h3>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => {
+                  onSolicitarDestino('Comprobante e Informe de Historial de Agua', (destData) => {
+                    generarPDFHistorialAgua(historial, destData);
+                    generarDOCXHistorialAgua(historial, destData);
+                    onShowToast('success', 'Historial Exportado', 'Se descargó el informe en PDF y Word (.docx).');
+                  });
+                }}
+                className="bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 border border-purple-500/30 text-xs font-semibold px-3 py-1.5 rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer"
+              >
+                <Download className="w-3.5 h-3.5" /> Exportar Historial PDF / Word
+              </button>
+            </div>
+          </div>
+
+          <div className="overflow-x-auto rounded-xl border border-gray-800 bg-gray-950 custom-scrollbar max-h-96">
+            <table className="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr className="bg-gray-900 text-gray-400 border-b border-gray-800 uppercase font-mono text-[10px] sticky top-0">
+                  <th className="p-3"># Reg</th>
+                  <th className="p-3">Fecha / Hora</th>
+                  <th className="p-3">Departamento</th>
+                  <th className="p-3">Producto</th>
+                  <th className="p-3 text-center">Cantidad</th>
+                  <th className="p-3">Entrega / Recibe</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-800/60">
+                {historial.map((item) => (
+                  <tr key={item.id} className="hover:bg-gray-800/40 transition-colors">
+                    <td className="p-3 font-mono font-bold text-cyan-400">#{item.idConsecutivo}</td>
+                    <td className="p-3 text-gray-400 whitespace-nowrap">
+                      {item.fecha} <span className="text-[10px] text-gray-500">{item.hora}</span>
+                    </td>
+                    <td className="p-3 font-bold text-white">{item.departamento}</td>
+                    <td className="p-3 text-gray-300">{item.producto}</td>
+                    <td className="p-3 text-center font-bold text-emerald-400 font-mono">{item.cantidad} u.</td>
+                    <td className="p-3 text-gray-400">
+                      {item.responsable} <span className="text-gray-600">→</span> {item.receptor}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 1: MARCAR AGUA ENTREGADA HOY */}
+      {showEntregaHoyModal && selectedDept && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
           <div className="bg-gray-900 border border-gray-800 w-full max-w-md rounded-2xl p-6 shadow-2xl space-y-4">
-            <h3 className="text-sm font-bold text-white flex items-center gap-2 border-b border-gray-800 pb-3">
-              <Send className="w-4 h-4 text-emerald-400" /> Registrar Entrega Parcial — {selectedDept.nombre}
-            </h3>
+            <div className="flex justify-between items-center border-b border-gray-800 pb-3">
+              <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                <CheckSquare className="w-4 h-4 text-emerald-400" /> Registrar Entrega del Día
+              </h3>
+              <button onClick={() => setShowEntregaHoyModal(false)} className="text-gray-400 hover:text-white">
+                ✕
+              </button>
+            </div>
 
-            <form onSubmit={handleEntregaParcial} className="space-y-3">
-              <div>
-                <label className="block text-xs font-semibold text-gray-400 mb-1">Cantidad a Entregar *</label>
-                <input
-                  type="number"
-                  min="1"
-                  required
-                  value={entregaCantidad}
-                  onChange={(e) => setEntregaCantidad(parseInt(e.target.value) || 1)}
-                  className="w-full bg-gray-950 border border-gray-800 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-cyan-500"
-                />
+            <p className="text-xs text-gray-300">
+              Departamento: <strong className="text-white">{selectedDept.nombre}</strong>
+            </p>
+
+            <form onSubmit={handleConfirmEntregaHoy} className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] font-semibold text-cyan-400 mb-1">Fardos a Entregar</label>
+                  <input
+                    type="number"
+                    min="0"
+                    required
+                    value={entregaFardos}
+                    onChange={(e) => setEntregaFardos(parseInt(e.target.value) || 0)}
+                    className="w-full bg-gray-950 border border-gray-800 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-cyan-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-semibold text-blue-400 mb-1">Botellones a Entregar</label>
+                  <input
+                    type="number"
+                    min="0"
+                    required
+                    value={entregaBotellones}
+                    onChange={(e) => setEntregaBotellones(parseInt(e.target.value) || 0)}
+                    className="w-full bg-gray-950 border border-gray-800 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-blue-500"
+                  />
+                </div>
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-gray-400 mb-1">Persona que Recibe *</label>
+                <label className="block text-[11px] font-semibold text-gray-400 mb-1">Persona que Recibe / Cargo *</label>
                 <input
                   type="text"
                   required
                   value={entregaReceptor}
                   onChange={(e) => setEntregaReceptor(e.target.value)}
-                  placeholder="Ej: Lic. María López — Supervisora"
+                  placeholder="Ej: Lic. María Pérez (Enfermería)"
                   className="w-full bg-gray-950 border border-gray-800 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-cyan-500"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-gray-400 mb-1">Persona que Entrega *</label>
+                <label className="block text-[11px] font-semibold text-gray-400 mb-1">Observaciones</label>
                 <input
                   type="text"
-                  required
-                  value={entregaResponsable}
-                  onChange={(e) => setEntregaResponsable(e.target.value)}
+                  value={entregaObservaciones}
+                  onChange={(e) => setEntregaObservaciones(e.target.value)}
+                  placeholder="Notas adicionales..."
                   className="w-full bg-gray-950 border border-gray-800 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-cyan-500"
                 />
               </div>
 
-              <div className="flex justify-end gap-2 pt-3 border-t border-gray-800">
+              <div className="bg-cyan-950/40 border border-cyan-800/40 p-2.5 rounded-xl text-[11px] text-cyan-300 flex items-center gap-2">
+                <Boxes className="w-4 h-4 text-cyan-400 shrink-0" />
+                Se descontará automáticamente del stock físico de almacén.
+              </div>
+
+              <div className="flex justify-end gap-2 border-t border-gray-800 pt-3">
                 <button
                   type="button"
-                  onClick={() => setShowEntregaModal(false)}
-                  className="bg-gray-800 text-gray-300 px-4 py-2 rounded-xl text-xs font-semibold"
+                  onClick={() => setShowEntregaHoyModal(false)}
+                  className="bg-gray-800 hover:bg-gray-700 text-gray-300 px-4 py-2 rounded-xl text-xs font-semibold"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-xl text-xs font-semibold cursor-pointer shadow-md"
+                  className="bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-2 rounded-xl text-xs font-semibold shadow-md cursor-pointer"
                 >
-                  Confirmar Entrega
+                  Confirmar Entrega y Descontar Stock
                 </button>
               </div>
             </form>
@@ -587,88 +1044,141 @@ export const ControlAguaSection: React.FC<ControlAguaSectionProps> = ({
         </div>
       )}
 
-      {/* Modal Add Dept */}
+      {/* MODAL 2: AJUSTAR STOCK FÍSICO GENERAL */}
+      {showInventarioModal && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-gray-900 border border-gray-800 w-full max-w-md rounded-2xl p-6 shadow-2xl space-y-4">
+            <div className="flex justify-between items-center border-b border-gray-800 pb-3">
+              <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                <Boxes className="w-4 h-4 text-cyan-400" /> Ajustar Stock Físico General en Almacén
+              </h3>
+              <button onClick={() => setShowInventarioModal(false)} className="text-gray-400 hover:text-white">
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveInventarioGeneral} className="space-y-4">
+              <div>
+                <label className="block text-[11px] font-semibold text-cyan-400 mb-1">Total Fardos Disponibles en Almacén</label>
+                <input
+                  type="number"
+                  min="0"
+                  required
+                  value={editStockFardos}
+                  onChange={(e) => setEditStockFardos(parseInt(e.target.value) || 0)}
+                  className="w-full bg-gray-950 border border-gray-800 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-cyan-500 font-mono text-base"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-blue-400 mb-1">Total Botellones Disponibles en Almacén</label>
+                <input
+                  type="number"
+                  min="0"
+                  required
+                  value={editStockBotellones}
+                  onChange={(e) => setEditStockBotellones(parseInt(e.target.value) || 0)}
+                  className="w-full bg-gray-950 border border-gray-800 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-blue-500 font-mono text-base"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 border-t border-gray-800 pt-3">
+                <button
+                  type="button"
+                  onClick={() => setShowInventarioModal(false)}
+                  className="bg-gray-800 hover:bg-gray-700 text-gray-300 px-4 py-2 rounded-xl text-xs font-semibold"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="bg-cyan-600 hover:bg-cyan-500 text-white px-5 py-2 rounded-xl text-xs font-semibold shadow-md cursor-pointer"
+                >
+                  Guardar Stock en Firestore
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 3: AGREGAR NUEVO DEPARTAMENTO */}
       {showAddDeptModal && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
           <div className="bg-gray-900 border border-gray-800 w-full max-w-md rounded-2xl p-6 shadow-2xl space-y-4">
-            <h3 className="text-sm font-bold text-white flex items-center gap-2 border-b border-gray-800 pb-3">
-              <Plus className="w-4 h-4 text-cyan-400" /> Agregar Nuevo Departamento / Área
-            </h3>
+            <div className="flex justify-between items-center border-b border-gray-800 pb-3">
+              <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                <Building2 className="w-4 h-4 text-cyan-400" /> Configurar Límite de Departamento
+              </h3>
+              <button onClick={() => setShowAddDeptModal(false)} className="text-gray-400 hover:text-white">
+                ✕
+              </button>
+            </div>
 
             <form onSubmit={handleAddDept} className="space-y-3">
               <div>
-                <label className="block text-xs font-semibold text-gray-400 mb-1">Nombre del Departamento *</label>
+                <label className="block text-[11px] font-semibold text-gray-400 mb-1">Nombre del Departamento *</label>
                 <input
                   type="text"
                   required
                   value={newDeptNombre}
                   onChange={(e) => setNewDeptNombre(e.target.value)}
-                  placeholder="Ej: Quirófano Central / Sala 3"
+                  placeholder="Ej: Radiología, Odontología, Mantenimiento"
                   className="w-full bg-gray-950 border border-gray-800 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-cyan-500"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[11px] font-semibold text-gray-400 mb-1">Cuota Faldos</label>
+                  <label className="block text-[11px] font-semibold text-cyan-400 mb-1">Límite Fardos (Mensual)</label>
                   <input
                     type="number"
                     min="1"
-                    value={newFaldosHab}
-                    onChange={(e) => setNewFaldosHab(parseInt(e.target.value) || 0)}
-                    className="w-full bg-gray-950 border border-gray-800 rounded-xl px-3 py-1.5 text-xs text-white outline-none"
+                    required
+                    value={newMaxFardos}
+                    onChange={(e) => setNewMaxFardos(parseInt(e.target.value) || 1)}
+                    className="w-full bg-gray-950 border border-gray-800 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-cyan-500"
                   />
                 </div>
-                <div>
-                  <label className="block text-[11px] font-semibold text-gray-400 mb-1">Frecuencia Faldos</label>
-                  <select
-                    value={newFaldosFrec}
-                    onChange={(e) => setNewFaldosFrec(e.target.value as any)}
-                    className="w-full bg-gray-950 border border-gray-800 rounded-xl px-3 py-1.5 text-xs text-white outline-none"
-                  >
-                    <option value="Semanal">Semanal</option>
-                    <option value="Quincenal">Quincenal</option>
-                    <option value="Mensual">Mensual</option>
-                  </select>
-                </div>
-              </div>
 
-              <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[11px] font-semibold text-gray-400 mb-1">Cuota Botellones</label>
+                  <label className="block text-[11px] font-semibold text-blue-400 mb-1">Límite Botellones (Mensual)</label>
                   <input
                     type="number"
                     min="1"
-                    value={newBotellonesHab}
-                    onChange={(e) => setNewBotellonesHab(parseInt(e.target.value) || 0)}
-                    className="w-full bg-gray-950 border border-gray-800 rounded-xl px-3 py-1.5 text-xs text-white outline-none"
+                    required
+                    value={newMaxBotellones}
+                    onChange={(e) => setNewMaxBotellones(parseInt(e.target.value) || 1)}
+                    className="w-full bg-gray-950 border border-gray-800 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-blue-500"
                   />
-                </div>
-                <div>
-                  <label className="block text-[11px] font-semibold text-gray-400 mb-1">Frecuencia Botellones</label>
-                  <select
-                    value={newBotellonesFrec}
-                    onChange={(e) => setNewBotellonesFrec(e.target.value as any)}
-                    className="w-full bg-gray-950 border border-gray-800 rounded-xl px-3 py-1.5 text-xs text-white outline-none"
-                  >
-                    <option value="Semanal">Semanal</option>
-                    <option value="Quincenal">Quincenal</option>
-                    <option value="Mensual">Mensual</option>
-                  </select>
                 </div>
               </div>
 
-              <div className="flex justify-end gap-2 pt-3 border-t border-gray-800">
+              <div>
+                <label className="block text-[11px] font-semibold text-gray-400 mb-1">Frecuencia de Reposición</label>
+                <select
+                  value={newFrecuencia}
+                  onChange={(e) => setNewFrecuencia(e.target.value as any)}
+                  className="w-full bg-gray-950 border border-gray-800 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-cyan-500"
+                >
+                  <option value="Semanal">Semanal</option>
+                  <option value="Quincenal">Quincenal</option>
+                  <option value="Mensual">Mensual</option>
+                  <option value="Personalizada">Personalizada</option>
+                </select>
+              </div>
+
+              <div className="flex justify-end gap-2 border-t border-gray-800 pt-3">
                 <button
                   type="button"
                   onClick={() => setShowAddDeptModal(false)}
-                  className="bg-gray-800 text-gray-300 px-4 py-2 rounded-xl text-xs font-semibold"
+                  className="bg-gray-800 hover:bg-gray-700 text-gray-300 px-4 py-2 rounded-xl text-xs font-semibold"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="bg-cyan-600 hover:bg-cyan-500 text-white px-4 py-2 rounded-xl text-xs font-semibold shadow-md cursor-pointer"
+                  className="bg-cyan-600 hover:bg-cyan-500 text-white px-5 py-2 rounded-xl text-xs font-semibold shadow-md cursor-pointer"
                 >
                   Guardar Departamento
                 </button>
@@ -678,98 +1188,84 @@ export const ControlAguaSection: React.FC<ControlAguaSectionProps> = ({
         </div>
       )}
 
-      {/* Modal Edit Dept */}
+      {/* MODAL 4: EDITAR LÍMITES DE DEPARTAMENTO */}
       {showEditDeptModal && editingDept && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
           <div className="bg-gray-900 border border-gray-800 w-full max-w-md rounded-2xl p-6 shadow-2xl space-y-4">
-            <h3 className="text-sm font-bold text-white flex items-center gap-2 border-b border-gray-800 pb-3">
-              <Settings2 className="w-4 h-4 text-cyan-400" /> Editar Cuotas — {editingDept.nombre}
-            </h3>
+            <div className="flex justify-between items-center border-b border-gray-800 pb-3">
+              <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                <Settings2 className="w-4 h-4 text-cyan-400" /> Editar Límites del Departamento
+              </h3>
+              <button onClick={() => setShowEditDeptModal(false)} className="text-gray-400 hover:text-white">
+                ✕
+              </button>
+            </div>
 
             <form onSubmit={handleUpdateDept} className="space-y-3">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[11px] font-semibold text-gray-400 mb-1">Límite Faldos</label>
-                  <input
-                    type="number"
-                    min="0"
-                    value={editingDept.faldos.habilitado}
-                    onChange={(e) =>
-                      setEditingDept({
-                        ...editingDept,
-                        faldos: { ...editingDept.faldos, habilitado: parseInt(e.target.value) || 0 }
-                      })
-                    }
-                    className="w-full bg-gray-950 border border-gray-800 rounded-xl px-3 py-1.5 text-xs text-white outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[11px] font-semibold text-gray-400 mb-1">Frecuencia Faldos</label>
-                  <select
-                    value={editingDept.faldos.frecuencia}
-                    onChange={(e) =>
-                      setEditingDept({
-                        ...editingDept,
-                        faldos: { ...editingDept.faldos, frecuencia: e.target.value as any }
-                      })
-                    }
-                    className="w-full bg-gray-950 border border-gray-800 rounded-xl px-3 py-1.5 text-xs text-white outline-none"
-                  >
-                    <option value="Semanal">Semanal</option>
-                    <option value="Quincenal">Quincenal</option>
-                    <option value="Mensual">Mensual</option>
-                  </select>
-                </div>
+              <div>
+                <label className="block text-[11px] font-semibold text-gray-400 mb-1">Nombre</label>
+                <input
+                  type="text"
+                  required
+                  value={editingDept.nombre}
+                  onChange={(e) => setEditingDept({ ...editingDept, nombre: e.target.value })}
+                  className="w-full bg-gray-950 border border-gray-800 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-cyan-500"
+                />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[11px] font-semibold text-gray-400 mb-1">Límite Botellones</label>
+                  <label className="block text-[11px] font-semibold text-cyan-400 mb-1">Límite Fardos</label>
                   <input
                     type="number"
-                    min="0"
-                    value={editingDept.botellones.habilitado}
-                    onChange={(e) =>
-                      setEditingDept({
-                        ...editingDept,
-                        botellones: { ...editingDept.botellones, habilitado: parseInt(e.target.value) || 0 }
-                      })
-                    }
-                    className="w-full bg-gray-950 border border-gray-800 rounded-xl px-3 py-1.5 text-xs text-white outline-none"
+                    min="1"
+                    required
+                    value={editingDept.maxFardosMensual}
+                    onChange={(e) => setEditingDept({ ...editingDept, maxFardosMensual: parseInt(e.target.value) || 1 })}
+                    className="w-full bg-gray-950 border border-gray-800 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-cyan-500"
                   />
                 </div>
+
                 <div>
-                  <label className="block text-[11px] font-semibold text-gray-400 mb-1">Frecuencia Botellones</label>
-                  <select
-                    value={editingDept.botellones.frecuencia}
-                    onChange={(e) =>
-                      setEditingDept({
-                        ...editingDept,
-                        botellones: { ...editingDept.botellones, frecuencia: e.target.value as any }
-                      })
-                    }
-                    className="w-full bg-gray-950 border border-gray-800 rounded-xl px-3 py-1.5 text-xs text-white outline-none"
-                  >
-                    <option value="Semanal">Semanal</option>
-                    <option value="Quincenal">Quincenal</option>
-                    <option value="Mensual">Mensual</option>
-                  </select>
+                  <label className="block text-[11px] font-semibold text-blue-400 mb-1">Límite Botellones</label>
+                  <input
+                    type="number"
+                    min="1"
+                    required
+                    value={editingDept.maxBotellonesMensual}
+                    onChange={(e) => setEditingDept({ ...editingDept, maxBotellonesMensual: parseInt(e.target.value) || 1 })}
+                    className="w-full bg-gray-950 border border-gray-800 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-blue-500"
+                  />
                 </div>
               </div>
 
-              <div className="flex justify-end gap-2 pt-3 border-t border-gray-800">
+              <div>
+                <label className="block text-[11px] font-semibold text-gray-400 mb-1">Frecuencia de Reposición</label>
+                <select
+                  value={editingDept.frecuencia}
+                  onChange={(e) => setEditingDept({ ...editingDept, frecuencia: e.target.value as any })}
+                  className="w-full bg-gray-950 border border-gray-800 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-cyan-500"
+                >
+                  <option value="Semanal">Semanal</option>
+                  <option value="Quincenal">Quincenal</option>
+                  <option value="Mensual">Mensual</option>
+                  <option value="Personalizada">Personalizada</option>
+                </select>
+              </div>
+
+              <div className="flex justify-end gap-2 border-t border-gray-800 pt-3">
                 <button
                   type="button"
                   onClick={() => setShowEditDeptModal(false)}
-                  className="bg-gray-800 text-gray-300 px-4 py-2 rounded-xl text-xs font-semibold"
+                  className="bg-gray-800 hover:bg-gray-700 text-gray-300 px-4 py-2 rounded-xl text-xs font-semibold"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="bg-cyan-600 hover:bg-cyan-500 text-white px-4 py-2 rounded-xl text-xs font-semibold shadow-md cursor-pointer"
+                  className="bg-cyan-600 hover:bg-cyan-500 text-white px-5 py-2 rounded-xl text-xs font-semibold shadow-md cursor-pointer"
                 >
-                  Guardar Cambios
+                  Actualizar Cambios
                 </button>
               </div>
             </form>
@@ -777,27 +1273,19 @@ export const ControlAguaSection: React.FC<ControlAguaSectionProps> = ({
         </div>
       )}
 
-      {/* Modal de Confirmación para Departamento */}
-      <ConfirmModal
-        isOpen={!!deptAEliminar}
-        title="Eliminar Departamento"
-        message="¿Estás seguro de que deseas eliminar este departamento? Se eliminarán las configuraciones de cuota de agua."
-        itemName={deptAEliminar?.nombre}
-        onConfirm={handleConfirmDeleteDept}
-        onClose={() => setDeptAEliminar(null)}
-        loading={deleting}
-      />
-
-      {/* Modal de Confirmación para Historial de Agua */}
-      <ConfirmModal
-        isOpen={!!historialAEliminar}
-        title="Eliminar Registro de Entrega"
-        message="¿Estás seguro de que deseas eliminar este registro del historial de entregas de agua?"
-        itemName={historialAEliminar ? `Registro #${historialAEliminar.idConsecutivo}` : undefined}
-        onConfirm={handleConfirmDeleteHistorial}
-        onClose={() => setHistorialAEliminar(null)}
-        loading={deleting}
-      />
+      {/* CONFIRMATION MODALS FOR DELETION */}
+      {deptAEliminar && (
+        <ConfirmModal
+          isOpen={true}
+          title="Eliminar Departamento"
+          message={`¿Estás seguro de que deseas eliminar el departamento "${deptAEliminar.nombre}"?`}
+          confirmText="Sí, Eliminar"
+          isDanger={true}
+          loading={deleting}
+          onConfirm={handleConfirmDeleteDept}
+          onClose={() => setDeptAEliminar(null)}
+        />
+      )}
     </div>
   );
 };

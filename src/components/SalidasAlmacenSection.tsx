@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Truck, Plus, Search, Trash2, Printer, Calendar, User, Package, Clock, FileText, CheckCircle, FileSpreadsheet, Download } from 'lucide-react';
+import { Truck, Plus, Search, Trash2, Printer, Calendar, User, Package, Clock, FileText, CheckCircle, FileSpreadsheet, Download, Layers } from 'lucide-react';
 import { collection, onSnapshot, addDoc, deleteDoc, doc, query, orderBy } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../firebase';
-import { SalidaAlmacen, ExportDestinoData } from '../types';
+import { SalidaAlmacen, ItemSalida, ExportDestinoData } from '../types';
 import { ConfirmModal } from './ConfirmModal';
 import {
   generarPDFSalidaAlmacen,
@@ -35,10 +35,12 @@ export const SalidasAlmacenSection: React.FC<SalidasAlmacenSectionProps> = ({
   // Form states
   const [tipoSalida, setTipoSalida] = useState<SalidaAlmacen['tipoSalida']>('Consumo Interno');
   const [categoriaBien, setCategoriaBien] = useState<SalidaAlmacen['categoriaBien']>('Material médico');
-  const [items, setItems] = useState('');
-  const [descripcion, setDescripcion] = useState('');
-  const [cantidad, setCantidad] = useState(1);
-  const [unidad, setUnidad] = useState('Cajas');
+  
+  // Multi-item product rows state
+  const [itemsList, setItemsList] = useState<ItemSalida[]>([
+    { items: '', descripcion: '', cantidad: 1, unidad: 'Cajas', categoriaBien: 'Material médico' }
+  ]);
+
   const [personaRecibe, setPersonaRecibe] = useState('');
   const [personaEntrega, setPersonaEntrega] = useState(usuarioNombre || 'Almacén Central');
   const [departamentoSolicitante, setDepartamentoSolicitante] = useState('');
@@ -67,12 +69,43 @@ export const SalidasAlmacenSection: React.FC<SalidasAlmacenSectionProps> = ({
     return () => unsubscribe();
   }, []);
 
+  const handleAddItemRow = () => {
+    setItemsList((prev) => [
+      ...prev,
+      { items: '', descripcion: '', cantidad: 1, unidad: 'Cajas', categoriaBien }
+    ]);
+  };
+
+  const handleRemoveItemRow = (index: number) => {
+    if (itemsList.length <= 1) return;
+    setItemsList((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleItemRowChange = (index: number, field: keyof ItemSalida, value: any) => {
+    setItemsList((prev) => {
+      const updated = [...prev];
+      updated[index] = { ...updated[index], [field]: value };
+      return updated;
+    });
+  };
+
   const handleCreateSalida = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!items.trim() || !personaRecibe.trim() || !departamentoSolicitante.trim()) {
-      onShowToast('error', 'Campos Incompletos', 'Completa los datos requeridos.');
+    
+    // Validate that every product row has a name
+    const validItems = itemsList.filter((it) => it.items.trim().length > 0);
+    if (validItems.length === 0 || !personaRecibe.trim() || !departamentoSolicitante.trim()) {
+      onShowToast('error', 'Campos Incompletos', 'Agrega al menos un producto con nombre válido y completa los responsables.');
       return;
     }
+
+    const totalCantidad = validItems.reduce((acc, curr) => acc + (curr.cantidad > 0 ? curr.cantidad : 1), 0);
+    const primarySummary = validItems.length === 1
+      ? validItems[0].items.trim()
+      : `${validItems[0].items.trim()} y ${validItems.length - 1} producto(s) más`;
+
+    const primaryUnit = validItems.length === 1 ? validItems[0].unidad : 'ítems';
+    const primaryDesc = validItems.map((it) => `${it.items} (${it.cantidad} ${it.unidad})`).join(', ');
 
     const now = new Date();
     const nuevaSalida: Omit<SalidaAlmacen, 'id'> = {
@@ -80,10 +113,11 @@ export const SalidasAlmacenSection: React.FC<SalidasAlmacenSectionProps> = ({
       hora: now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }),
       tipoSalida,
       categoriaBien,
-      items: items.trim(),
-      descripcion: descripcion.trim() || 'Sin descripción adicional',
-      cantidad: cantidad > 0 ? cantidad : 1,
-      unidad: unidad.trim() || 'u.',
+      items: primarySummary,
+      descripcion: primaryDesc,
+      cantidad: totalCantidad,
+      unidad: primaryUnit,
+      itemsList: validItems,
       personaRecibe: personaRecibe.trim(),
       personaEntrega: personaEntrega.trim() || usuarioNombre || 'Almacén Central',
       departamentoSolicitante: departamentoSolicitante.trim(),
@@ -96,10 +130,10 @@ export const SalidasAlmacenSection: React.FC<SalidasAlmacenSectionProps> = ({
       const docRef = await addDoc(collection(db, 'salidas_almacen'), nuevaSalida);
       const salidaConId: SalidaAlmacen = { ...nuevaSalida, id: docRef.id };
 
-      onShowToast('success', 'Salida Registrada', 'La salida de almacén se guardó en Firestore.');
+      onShowToast('success', 'Salida Registrada', `Se registraron ${validItems.length} producto(s) en la salida.`);
       setShowModal(false);
 
-      // Generar documentos en PDF y Word
+      // Generar documentos en PDF y Word con lista completa
       if (onSolicitarDestino) {
         onSolicitarDestino(`Carta y Comprobante de Salida — ${salidaConId.items}`, async (destData) => {
           generarPDFSalidaAlmacen(salidaConId, destData);
@@ -120,10 +154,9 @@ export const SalidasAlmacenSection: React.FC<SalidasAlmacenSectionProps> = ({
   };
 
   const resetForm = () => {
-    setItems('');
-    setDescripcion('');
-    setCantidad(1);
-    setUnidad('Cajas');
+    setItemsList([
+      { items: '', descripcion: '', cantidad: 1, unidad: 'Cajas', categoriaBien: 'Material médico' }
+    ]);
     setPersonaRecibe('');
     setDepartamentoSolicitante('');
     setObservaciones('');
@@ -277,8 +310,27 @@ export const SalidasAlmacenSection: React.FC<SalidasAlmacenSectionProps> = ({
                   </td>
                   <td className="p-3 text-gray-300 font-medium">{item.categoriaBien}</td>
                   <td className="p-3">
-                    <p className="font-bold text-white">{item.items}</p>
-                    <p className="text-[11px] text-gray-400 line-clamp-1">{item.descripcion}</p>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <p className="font-bold text-white">{item.items}</p>
+                      {item.itemsList && item.itemsList.length > 1 && (
+                        <span className="bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 text-[10px] font-bold px-1.5 py-0.5 rounded-full flex items-center gap-1">
+                          <Layers className="w-2.5 h-2.5" />
+                          {item.itemsList.length} productos
+                        </span>
+                      )}
+                    </div>
+                    {item.itemsList && item.itemsList.length > 1 ? (
+                      <div className="mt-1 space-y-0.5">
+                        {item.itemsList.map((prod, pIdx) => (
+                          <p key={pIdx} className="text-[10px] text-gray-400 flex items-center gap-1">
+                            • <span className="text-gray-200 font-medium">{prod.items}</span>
+                            <span className="text-gray-500">({prod.cantidad} {prod.unidad})</span>
+                          </p>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-[11px] text-gray-400 line-clamp-1">{item.descripcion}</p>
+                    )}
                   </td>
                   <td className="p-3 text-center font-bold text-emerald-400 font-mono">
                     {item.cantidad} {item.unidad}
@@ -390,53 +442,89 @@ export const SalidasAlmacenSection: React.FC<SalidasAlmacenSectionProps> = ({
                 </div>
               </div>
 
-              <div>
-                <label className="block text-[11px] font-semibold text-gray-400 mb-1">Medicamentos / Materiales / Bienes *</label>
-                <input
-                  type="text"
-                  required
-                  value={items}
-                  onChange={(e) => setItems(e.target.value)}
-                  placeholder="Ej: Gasas estériles, Jeringas 5ml, Amoxicilina 500mg"
-                  className="w-full bg-gray-950 border border-gray-800 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-cyan-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-semibold text-gray-400 mb-1">Descripción / Especificaciones</label>
-                <input
-                  type="text"
-                  value={descripcion}
-                  onChange={(e) => setDescripcion(e.target.value)}
-                  placeholder="Marca, lote, características..."
-                  className="w-full bg-gray-950 border border-gray-800 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-cyan-500"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[11px] font-semibold text-gray-400 mb-1">Cantidad *</label>
-                  <input
-                    type="number"
-                    min="1"
-                    required
-                    value={cantidad}
-                    onChange={(e) => setCantidad(parseInt(e.target.value) || 1)}
-                    className="w-full bg-gray-950 border border-gray-800 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-cyan-500"
-                  />
+              {/* Dynamic Product Rows List */}
+              <div className="space-y-2 border border-gray-800 rounded-2xl p-3 bg-gray-950/50">
+                <div className="flex justify-between items-center mb-1">
+                  <label className="text-[11px] font-bold text-cyan-400 uppercase tracking-wider flex items-center gap-1.5">
+                    <Layers className="w-3.5 h-3.5" /> Productos / Ítems de la Salida ({itemsList.length})
+                  </label>
+                  <button
+                    type="button"
+                    onClick={handleAddItemRow}
+                    className="bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 text-[11px] font-semibold px-2.5 py-1 rounded-lg flex items-center gap-1 transition-colors cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> Agregar Producto
+                  </button>
                 </div>
 
-                <div>
-                  <label className="block text-[11px] font-semibold text-gray-400 mb-1">Unidad *</label>
-                  <input
-                    type="text"
-                    required
-                    value={unidad}
-                    onChange={(e) => setUnidad(e.target.value)}
-                    placeholder="Ej: Cajas, Frascos, Unidades"
-                    className="w-full bg-gray-950 border border-gray-800 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-cyan-500"
-                  />
-                </div>
+                {itemsList.map((row, idx) => (
+                  <div key={idx} className="bg-gray-900 border border-gray-800 p-3 rounded-xl space-y-2 relative group">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[10px] font-bold text-gray-500 bg-gray-950 px-2 py-0.5 rounded-full border border-gray-800">
+                        #{idx + 1}
+                      </span>
+                      {itemsList.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveItemRow(idx)}
+                          className="text-red-400 hover:text-red-300 p-1 hover:bg-red-500/10 rounded-lg transition-colors cursor-pointer"
+                          title="Eliminar producto"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <div>
+                        <label className="block text-[10px] text-gray-400 mb-0.5">Producto / Bien *</label>
+                        <input
+                          type="text"
+                          required
+                          value={row.items}
+                          onChange={(e) => handleItemRowChange(idx, 'items', e.target.value)}
+                          placeholder="Ej: Gasas, Jeringas 5ml, Suero 500ml"
+                          className="w-full bg-gray-950 border border-gray-800 rounded-lg px-2.5 py-1.5 text-xs text-white outline-none focus:border-cyan-500"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] text-gray-400 mb-0.5">Descripción / Especificaciones</label>
+                        <input
+                          type="text"
+                          value={row.descripcion || ''}
+                          onChange={(e) => handleItemRowChange(idx, 'descripcion', e.target.value)}
+                          placeholder="Ej: Marca, Lote, Tamaño"
+                          className="w-full bg-gray-950 border border-gray-800 rounded-lg px-2.5 py-1.5 text-xs text-white outline-none focus:border-cyan-500"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] text-gray-400 mb-0.5">Cantidad *</label>
+                        <input
+                          type="number"
+                          min="1"
+                          required
+                          value={row.cantidad}
+                          onChange={(e) => handleItemRowChange(idx, 'cantidad', parseInt(e.target.value) || 1)}
+                          className="w-full bg-gray-950 border border-gray-800 rounded-lg px-2.5 py-1.5 text-xs text-white outline-none focus:border-cyan-500"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] text-gray-400 mb-0.5">Unidad de Medida *</label>
+                        <input
+                          type="text"
+                          required
+                          value={row.unidad}
+                          onChange={(e) => handleItemRowChange(idx, 'unidad', e.target.value)}
+                          placeholder="Ej: Cajas, Unidades, Frascos"
+                          className="w-full bg-gray-950 border border-gray-800 rounded-lg px-2.5 py-1.5 text-xs text-white outline-none focus:border-cyan-500"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
 
               <div className="grid grid-cols-2 gap-3">
