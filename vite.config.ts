@@ -5,6 +5,7 @@ import {defineConfig} from 'vite';
 
 export default defineConfig(() => {
   return {
+    base: './',
     plugins: [react(), tailwindcss()],
     resolve: {
       alias: {
@@ -15,7 +16,7 @@ export default defineConfig(() => {
       rollupOptions: {
         input: {
           main: path.resolve(__dirname, 'index.html'),
-          
+          index_2: path.resolve(__dirname, 'index_2.html'),
         },
       },
     },
