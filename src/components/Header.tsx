@@ -1,5 +1,5 @@
 import React from 'react';
-import { Layers, Calendar, Users, HelpCircle, LogOut, PackageCheck } from 'lucide-react';
+import { Calendar, Users, HelpCircle, LogOut, PackageCheck } from 'lucide-react';
 import { Usuario } from '../types';
 
 interface HeaderProps {
@@ -28,7 +28,11 @@ export const Header: React.FC<HeaderProps> = ({
     <header className="bg-gray-900/90 backdrop-blur-md border-b border-gray-800 sticky top-0 z-40 px-6 py-3.5 flex flex-wrap justify-between items-center gap-3">
       <div>
         <h1 className="text-xl font-black text-white tracking-tight flex items-center gap-2.5">
-          <Layers className="text-cyan-500 w-6 h-6" />
+          <img
+            src="/logo.png"
+            alt="Hospital Supply Manager logo"
+            className="w-8 h-8 object-contain rounded-md bg-white/10 p-1"
+          />
           HOSPITAL SUPPLY MANAGER
           <span className="text-xs bg-cyan-500/10 text-cyan-400 font-mono px-2 py-0.5 rounded-full border border-cyan-500/20">
             v3.1 Firestore
