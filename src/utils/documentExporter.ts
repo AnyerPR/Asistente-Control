@@ -15,6 +15,153 @@ import {
 const HOSPITAL_NAME = 'HOSPITAL INFANTIL DR. JOSÉ M. RODRÍGUEZ JIMÉNEZ';
 const SYSTEM_TITLE = 'SISTEMA DE GESTIÓN Y ALMACÉN CENTRAL';
 
+// Helper for formatting dates in formal Spanish format (e.g. "14 de agosto de 2026")
+export function getFormattedSpanishDate(dateInput?: Date | string) {
+  let validDate = new Date();
+  if (dateInput) {
+    if (typeof dateInput === 'string') {
+      // Handle dd/mm/yyyy or ISO
+      if (dateInput.includes('/')) {
+        const parts = dateInput.split('/');
+        if (parts.length === 3) {
+          const d = parseInt(parts[0], 10);
+          const m = parseInt(parts[1], 10) - 1;
+          const y = parseInt(parts[2], 10);
+          validDate = new Date(y, m, d);
+        }
+      } else {
+        const parsed = new Date(dateInput);
+        if (!isNaN(parsed.getTime())) validDate = parsed;
+      }
+    } else if (dateInput instanceof Date && !isNaN(dateInput.getTime())) {
+      validDate = dateInput;
+    }
+  }
+
+  const meses = [
+    'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
+    'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'
+  ];
+
+  const dia = validDate.getDate();
+  const mes = meses[validDate.getMonth()];
+  const anio = validDate.getFullYear();
+
+  return `${dia} de ${mes} de ${anio}`;
+}
+
+// Draw the exact official hospital timbrado header (Logo H, typography, subtle arc watermark, and date)
+export function drawHospitalTimbradoHeader(doc: jsPDF, fechaTexto?: string) {
+  const pageWidth = doc.internal.pageSize.getWidth();
+
+  // 1. Subtle circular background arc on right side
+  doc.setFillColor(243, 248, 252); // #F3F8FC
+  doc.circle(pageWidth + 10, 110, 62, 'F');
+
+  // 2. Vector Logo "H"
+  // Left vertical pillar
+  doc.setFillColor(107, 164, 184); // #6BA4B8
+  doc.roundedRect(18, 14, 5.5, 18, 2.7, 2.7, 'F');
+
+  // Right vertical pillar
+  doc.setFillColor(142, 197, 222); // #8EC5DE
+  doc.roundedRect(28.5, 14, 5.5, 18, 2.7, 2.7, 'F');
+
+  // Wave connector between pillars
+  doc.setFillColor(107, 164, 184);
+  doc.roundedRect(21, 21.5, 10.5, 3.8, 1.5, 1.5, 'F');
+
+  // Three small stacked dots above right pillar
+  doc.setFillColor(142, 197, 222);
+  doc.circle(36.5, 14.5, 0.85, 'F');
+  doc.circle(36.5, 17.5, 0.85, 'F');
+  doc.circle(36.5, 20.5, 0.85, 'F');
+
+  // 3. Hospital Name Typography
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(10.5);
+  doc.setTextColor(112, 179, 214); // #70B3D6
+  doc.text('Hospital Infantil', 40, 18);
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(11.5);
+  doc.setTextColor(75, 156, 213); // #4B9CD5
+  doc.text('DR. JOSÉ MANUEL', 40, 23.5);
+  doc.text('RODRÍGUEZ JIMÉNES', 40, 29);
+
+  // 4. Date & Location at Top Right
+  const fechaDisplay = fechaTexto || getFormattedSpanishDate();
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  doc.setTextColor(15, 23, 42); // slate-900
+  doc.text(`Santo Domingo, R.D. | ${fechaDisplay}`, pageWidth - 18, 34, { align: 'right' });
+}
+
+// Draw the exact official hospital timbrado footer (Address, contact, RNC, web & SRS Metropolitano badge)
+export function drawHospitalTimbradoFooter(doc: jsPDF) {
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+
+  // 1. Bottom right corner decorative curve shape
+  doc.setFillColor(142, 156, 168); // #8E9CA8
+  doc.circle(pageWidth, pageHeight, 26, 'F');
+
+  // 2. Circular Seal "SRS METROPOLITANO"
+  const badgeX = pageWidth - 18;
+  const badgeY = pageHeight - 14;
+
+  doc.setFillColor(255, 255, 255);
+  doc.circle(badgeX, badgeY, 10, 'F');
+  doc.setDrawColor(142, 156, 168);
+  doc.setLineWidth(0.6);
+  doc.circle(badgeX, badgeY, 9.5, 'S');
+
+  // Inner icon / wave & text in badge
+  doc.setDrawColor(100, 116, 139);
+  doc.setLineWidth(0.4);
+  doc.line(badgeX - 5, badgeY - 2, badgeX - 2, badgeY - 4.5);
+  doc.line(badgeX - 2, badgeY - 4.5, badgeX + 2, badgeY - 1.5);
+  doc.line(badgeX + 2, badgeY - 1.5, badgeX + 5, badgeY - 3.5);
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(3.8);
+  doc.setTextColor(100, 116, 139);
+  doc.text('METROPOLITANO', badgeX, badgeY + 2.2, { align: 'center' });
+  doc.setFontSize(5.5);
+  doc.text('SRS', badgeX, badgeY + 5.2, { align: 'center' });
+
+  // 3. Bottom Left Institutional Information
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7.5);
+  doc.setTextColor(88, 160, 190); // #58A0BE
+
+  doc.text('Calle 28 Esq. Calle 39,Ens. La Fe , Sto. Dgo. D.N. R.D.', 18, pageHeight - 22);
+
+  doc.text('Telefono : ', 18, pageHeight - 18);
+  doc.setFont('helvetica', 'bold');
+  doc.text('809-566-3322', 30, pageHeight - 18);
+  doc.setFont('helvetica', 'normal');
+  doc.text(' | E-mail: direccion@hijmr.gob.do', 49, pageHeight - 18);
+
+  doc.setFont('helvetica', 'bold');
+  doc.text('RNC ', 18, pageHeight - 14);
+  doc.text('430040495', 25, pageHeight - 14);
+
+  // Small web globe / button
+  doc.setFillColor(112, 179, 214);
+  doc.circle(20.5, pageHeight - 8.5, 2.8, 'F');
+  doc.setFontSize(3.2);
+  doc.setTextColor(255, 255, 255);
+  doc.setFont('helvetica', 'bold');
+  doc.text('www', 20.5, pageHeight - 7.5, { align: 'center' });
+
+  // Web text
+  doc.setFontSize(7.5);
+  doc.setTextColor(88, 160, 190);
+  doc.setFont('helvetica', 'normal');
+  doc.text('www.hijmr.gob.do', 25.5, pageHeight - 8);
+}
+
 // Helper for formatting dates and times
 function getFormattedNow() {
   const now = new Date();
@@ -28,67 +175,50 @@ function getFormattedNow() {
 // 1. DESPACHOS GLOBALES (HISTORIAL)
 // ==========================================
 
-// Individual Despacho PDF
+// Individual Despacho PDF (Timbrado Oficial Tipo Carta)
 export function generarPDFDespachoGlobal(despacho: DespachoGlobal, destData?: ExportDestinoData) {
-  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'letter' });
   const pageWidth = doc.internal.pageSize.getWidth();
-  const { fecha: fechaImpresion, hora: horaImpresion } = getFormattedNow();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const fechaEspanol = getFormattedSpanishDate(despacho.fecha);
 
-  // Banner Header
-  doc.setFillColor(15, 23, 42); // slate-900
-  doc.rect(0, 0, pageWidth, 32, 'F');
+  // 1. Encabezado Timbrado Oficial
+  drawHospitalTimbradoHeader(doc, fechaEspanol);
 
-  doc.setTextColor(255, 255, 255);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(13);
-  doc.text(HOSPITAL_NAME, 14, 13);
+  // 2. Destinatario y Asunto
+  const receptorNombre = destData ? destData.nombre : despacho.paciente;
+  const receptorCargo = destData ? destData.cargo : (destData?.dependencia || despacho.departamento || 'Departamento / Servicio Solicitante');
+  const asuntoTexto = `Comprobante de Despacho de Medicamentos — No. ${despacho.numeroDespacho}`;
 
+  let y = 48;
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8.5);
-  doc.setTextColor(148, 163, 184);
-  doc.text(`${SYSTEM_TITLE} — COMPROBANTE DE DESPACHO DE MEDICAMENTOS`, 14, 20);
-
-  // Status Badge
-  const isCompleted = despacho.estado === 'Completado';
-  doc.setFillColor(isCompleted ? 16 : 217, isCompleted ? 185 : 119, isCompleted ? 129 : 6);
-  doc.roundedRect(pageWidth - 45, 10, 32, 8, 2, 2, 'F');
-  doc.setTextColor(255, 255, 255);
-  doc.setFontSize(8);
-  doc.setFont('helvetica', 'bold');
-  doc.text(despacho.estado.toUpperCase(), pageWidth - 29, 15, { align: 'center' });
-
-  let y = 40;
-
-  // Details box
-  doc.setFillColor(248, 250, 252);
-  doc.setDrawColor(226, 232, 240);
-  doc.roundedRect(14, y, pageWidth - 28, 38, 3, 3, 'FD');
-
-  doc.setTextColor(30, 41, 59);
-  doc.setFontSize(10);
-  doc.setFont('helvetica', 'bold');
-  doc.text(`DESPACHO NO: ${despacho.numeroDespacho}`, 20, y + 9);
-
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8.5);
-  doc.text(`Fecha y Hora: ${despacho.fecha} — ${despacho.hora}`, 20, y + 16);
-  doc.text(`Paciente: ${despacho.paciente}`, 20, y + 23);
-  doc.text(`Departamento / Área: ${despacho.departamento}`, 20, y + 30);
-
-  doc.text(`Responsable / Entrega: ${despacho.responsable}`, pageWidth - 85, y + 16);
-  if (destData) {
-    doc.text(`Destino / Recibe: ${destData.nombre}`, pageWidth - 85, y + 23);
-    doc.text(`Cargo / Dependencia: ${destData.cargo}${destData.dependencia ? ' - ' + destData.dependencia : ''}`, pageWidth - 85, y + 30);
-  }
-
-  y += 46;
-
-  doc.setFont('helvetica', 'bold');
   doc.setFontSize(10);
   doc.setTextColor(15, 23, 42);
-  doc.text('DETALLE DE MEDICAMENTOS E INSUMOS DESPACHADOS', 14, y);
+  doc.text(`A: ${receptorCargo}`, 18, y);
 
-  y += 4;
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10.5);
+  doc.text(receptorNombre, 18, y + 6);
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10);
+  doc.text(`Asunto: ${asuntoTexto}`, 18, y + 12);
+
+  // 3. Cuerpo de la Carta Formal
+  y = 70;
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9.5);
+  doc.setTextColor(30, 41, 59);
+
+  const parrafoIntro = 'Por medio de la presente correspondencia oficial, se emite constancia formal respecto a la novedad o certificación técnica descrita a continuación:';
+  const lineasIntro = doc.splitTextToSize(parrafoIntro, pageWidth - 36);
+  doc.text(lineasIntro, 18, y);
+  y += (lineasIntro.length * 5) + 3;
+
+  const parrafoDetalle = `Se hace constar formalmente el despacho e inmunización/entrega de los medicamentos e insumos hospitalarios detallados a continuación, asignados al paciente/servicio ${despacho.paciente} en el área de ${despacho.departamento}:`;
+  const lineasDetalle = doc.splitTextToSize(parrafoDetalle, pageWidth - 36);
+  doc.text(lineasDetalle, 18, y);
+  y += (lineasDetalle.length * 5) + 4;
 
   const tableData = despacho.medicamentos.map((item, idx) => [
     (idx + 1).toString(),
@@ -103,89 +233,127 @@ export function generarPDFDespachoGlobal(despacho: DespachoGlobal, destData?: Ex
     head: [['#', 'Medicamento / Ítem', 'Cantidad', 'Precio Unit.', 'Subtotal ($)']],
     body: tableData,
     theme: 'grid',
-    headStyles: { fillColor: [14, 116, 144], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 8.5 },
-    bodyStyles: { fontSize: 8, textColor: [51, 65, 85] },
+    headStyles: {
+      fillColor: [241, 245, 249],
+      textColor: [15, 23, 42],
+      fontStyle: 'bold',
+      fontSize: 8.5,
+      lineColor: [203, 213, 225],
+      lineWidth: 0.2
+    },
+    bodyStyles: {
+      fontSize: 8.5,
+      textColor: [51, 65, 85],
+      lineColor: [226, 232, 240],
+      lineWidth: 0.2
+    },
     columnStyles: {
       0: { cellWidth: 10, halign: 'center' },
-      1: { cellWidth: 90 },
+      1: { cellWidth: 80 },
       2: { cellWidth: 25, halign: 'center' },
-      3: { cellWidth: 28, halign: 'right' },
-      4: { cellWidth: 28, halign: 'right' }
-    }
+      3: { cellWidth: 30, halign: 'right' },
+      4: { cellWidth: 30, halign: 'right', fontStyle: 'bold' }
+    },
+    margin: { left: 18, right: 18 }
   });
 
   const finalY = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable?.finalY || y + 30;
-  let nextY = finalY + 8;
+  let nextY = finalY + 5;
 
-  // Totals box
-  doc.setFillColor(241, 245, 249);
-  doc.roundedRect(pageWidth - 75, nextY, 61, 12, 2, 2, 'F');
+  // Cuadro de Total
+  doc.setFillColor(248, 250, 252);
+  doc.setDrawColor(203, 213, 225);
+  doc.roundedRect(pageWidth - 75, nextY, 57, 10, 1.5, 1.5, 'FD');
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9);
+  doc.setTextColor(15, 23, 42);
+  doc.text(`TOTAL: $${despacho.totales ? despacho.totales.toFixed(2) : '0.00'}`, pageWidth - 46.5, nextY + 6.5, { align: 'center' });
+
+  if (despacho.observaciones) {
+    nextY += 14;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8.5);
+    doc.setTextColor(15, 23, 42);
+    doc.text('Observaciones:', 18, nextY);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(71, 85, 105);
+    const obsLines = doc.splitTextToSize(despacho.observaciones, pageWidth - 36);
+    doc.text(obsLines, 18, nextY + 4.5);
+    nextY += (obsLines.length * 4.5) + 3;
+  } else {
+    nextY += 14;
+  }
+
+  // Párrafo de cierre
+  const parrafoCierre = 'Para que así conste a los fines institucionales correspondientes, se suscribe el presente documento.';
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9.5);
+  doc.setTextColor(30, 41, 59);
+  doc.text(parrafoCierre, 18, nextY);
+  nextY += 6;
+
+  doc.text('Atentamente,', 18, nextY);
+
+  // 4. Firmas
+  const sigY = Math.min(Math.max(nextY + 18, 195), pageHeight - 55);
+
+  doc.setDrawColor(15, 23, 42);
+  doc.setLineWidth(0.4);
+  doc.line(18, sigY, 78, sigY);
+
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(9.5);
   doc.setTextColor(15, 23, 42);
-  doc.text(`TOTAL: $${despacho.totales ? despacho.totales.toFixed(2) : '0.00'}`, pageWidth - 45, nextY + 8, { align: 'center' });
-
-  if (despacho.observaciones) {
-    nextY += 18;
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(8.5);
-    doc.text('Observaciones:', 14, nextY);
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(71, 85, 105);
-    doc.text(despacho.observaciones, 14, nextY + 5, { maxWidth: pageWidth - 28 });
-  }
-
-  // Signatures
-  const sigY = Math.max(nextY + 30, 230);
-  doc.setDrawColor(148, 163, 184);
-  doc.line(25, sigY, 85, sigY);
-  doc.line(pageWidth - 85, sigY, pageWidth - 25, sigY);
-
-  doc.setFontSize(8);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(51, 65, 85);
-  doc.text('Firma y Sello — Entregó Conforme', 55, sigY + 5, { align: 'center' });
-  doc.text('Firma y Sello — Recibió Conforme', pageWidth - 55, sigY + 5, { align: 'center' });
+  doc.text('Recibido por', 18, sigY + 5);
 
   doc.setFont('helvetica', 'normal');
-  doc.setTextColor(100, 116, 139);
-  doc.text(despacho.responsable, 55, sigY + 9, { align: 'center' });
-  if (destData) {
-    doc.text(destData.nombre, pageWidth - 55, sigY + 9, { align: 'center' });
-  }
+  doc.setFontSize(8);
+  doc.setTextColor(71, 85, 105);
+  doc.text(receptorNombre, 18, sigY + 9);
 
-  // Footer
-  doc.setFontSize(7);
-  doc.setTextColor(148, 163, 184);
-  doc.text(`Documento generado por Hospital Supply Manager | Impreso el ${fechaImpresion} a las ${horaImpresion}`, pageWidth / 2, 285, { align: 'center' });
+  // Firma Emisor
+  const sigCenterX = pageWidth / 2 + 15;
+  doc.line(sigCenterX - 38, sigY + 18, sigCenterX + 38, sigY + 18);
 
-  doc.save(`Despacho_${despacho.numeroDespacho}.pdf`);
-}
-
-// Export FULL HISTORY of Despachos to PDF
-export function generarPDFHistorialDespachos(despachos: DespachoGlobal[], destData?: ExportDestinoData) {
-  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
-  const pageWidth = doc.internal.pageSize.getWidth();
-  const { fecha: fechaImpresion, hora: horaImpresion } = getFormattedNow();
-
-  doc.setFillColor(15, 23, 42);
-  doc.rect(0, 0, pageWidth, 28, 'F');
-
-  doc.setTextColor(255, 255, 255);
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(13);
-  doc.text(HOSPITAL_NAME, 14, 12);
+  doc.setFontSize(9.5);
+  doc.setTextColor(15, 23, 42);
+  doc.text(despacho.responsable || 'José Miguel Mesa Romero', sigCenterX, sigY + 23, { align: 'center' });
 
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8.5);
-  doc.setTextColor(148, 163, 184);
-  doc.text(`${SYSTEM_TITLE} — HISTORIAL COMPLETO DE DESPACHOS DE MEDICAMENTOS`, 14, 19);
+  doc.setTextColor(71, 85, 105);
+  doc.text('Encargado de Almacén y Suministros', sigCenterX, sigY + 27.5, { align: 'center' });
+
+  // 5. Pie de Página Timbrado Oficial
+  drawHospitalTimbradoFooter(doc);
+
+  doc.save(`Carta_Despacho_${despacho.numeroDespacho}.pdf`);
+}
+
+// Export FULL HISTORY of Despachos to PDF (Timbrado)
+export function generarPDFHistorialDespachos(despachos: DespachoGlobal[], destData?: ExportDestinoData) {
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'letter' });
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const fechaEspanol = getFormattedSpanishDate();
+
+  // Header Timbrado
+  drawHospitalTimbradoHeader(doc, fechaEspanol);
+
+  let y = 46;
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(11);
+  doc.setTextColor(15, 23, 42);
+  doc.text('HISTORIAL COMPLETO DE DESPACHOS DE MEDICAMENTOS', 18, y);
 
   if (destData) {
-    doc.setFontSize(8);
-    doc.setTextColor(226, 232, 240);
-    doc.text(`Dirigido a: ${destData.nombre} (${destData.cargo})`, pageWidth - 14, 19, { align: 'right' });
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.setTextColor(71, 85, 105);
+    doc.text(`Destino: ${destData.nombre} (${destData.cargo})`, pageWidth - 18, y, { align: 'right' });
   }
+
+  y += 5;
 
   const tableData = despachos.map((item, idx) => [
     (idx + 1).toString(),
@@ -200,23 +368,36 @@ export function generarPDFHistorialDespachos(despachos: DespachoGlobal[], destDa
   ]);
 
   autoTable(doc, {
-    startY: 34,
+    startY: y,
     head: [['#', 'No. Despacho', 'Fecha/Hora', 'Paciente', 'Departamento', 'Medicamentos / Ítems', 'Estado', 'Total ($)', 'Responsable']],
     body: tableData,
     theme: 'grid',
-    headStyles: { fillColor: [14, 116, 144], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 8 },
-    bodyStyles: { fontSize: 7.5, textColor: [51, 65, 85] },
+    headStyles: {
+      fillColor: [241, 245, 249],
+      textColor: [15, 23, 42],
+      fontStyle: 'bold',
+      fontSize: 8,
+      lineColor: [203, 213, 225],
+      lineWidth: 0.2
+    },
+    bodyStyles: {
+      fontSize: 7.5,
+      textColor: [51, 65, 85],
+      lineColor: [226, 232, 240],
+      lineWidth: 0.2
+    },
     columnStyles: {
       0: { cellWidth: 8, halign: 'center' },
       1: { cellWidth: 24, fontStyle: 'bold' },
       2: { cellWidth: 26 },
       3: { cellWidth: 35 },
       4: { cellWidth: 32 },
-      5: { cellWidth: 80 },
-      6: { cellWidth: 22, halign: 'center' },
+      5: { cellWidth: 70 },
+      6: { cellWidth: 20, halign: 'center' },
       7: { cellWidth: 22, halign: 'right' },
-      8: { cellWidth: 28 }
-    }
+      8: { cellWidth: 25 }
+    },
+    margin: { left: 18, right: 18 }
   });
 
   const totalSuma = despachos.reduce((acc, curr) => acc + (curr.totales || 0), 0);
@@ -225,27 +406,28 @@ export function generarPDFHistorialDespachos(despachos: DespachoGlobal[], destDa
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(9);
   doc.setTextColor(15, 23, 42);
-  doc.text(`TOTAL REGISTROS: ${despachos.length} | MONTO TOTAL DESPACHADO: $${totalSuma.toFixed(2)}`, 14, finalY + 8);
+  doc.text(`TOTAL REGISTROS: ${despachos.length} | MONTO TOTAL DESPACHADO: $${totalSuma.toFixed(2)}`, 18, finalY + 8);
 
-  doc.setFontSize(7);
-  doc.setTextColor(148, 163, 184);
-  doc.text(`Reporte generado por Hospital Supply Manager | Impreso el ${fechaImpresion} a las ${horaImpresion}`, pageWidth / 2, 198, { align: 'center' });
+  // Footer Timbrado
+  drawHospitalTimbradoFooter(doc);
 
-  doc.save(`Historial_Despachos_${fechaImpresion.replace(/\//g, '-')}.pdf`);
+  doc.save(`Historial_Despachos_${fechaEspanol.replace(/\s+/g, '_')}.pdf`);
 }
 
-// Individual Despacho DOCX
+// Individual Despacho DOCX (Timbrado Oficial Tipo Carta)
 export async function generarDOCXDespachoGlobal(despacho: DespachoGlobal, destData?: ExportDestinoData) {
-  const { fecha: fechaImpresion, hora: horaImpresion } = getFormattedNow();
+  const fechaEspanol = getFormattedSpanishDate(despacho.fecha);
+  const receptorNombre = destData ? destData.nombre : despacho.paciente;
+  const receptorCargo = destData ? destData.cargo : (destData?.dependencia || despacho.departamento || 'Departamento / Servicio Solicitante');
 
   const tableRows = [
     new TableRow({
       children: [
-        new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: '#', bold: true })] })], width: { size: 5, type: WidthType.PERCENTAGE } }),
-        new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: 'Medicamento / Ítem', bold: true })] })], width: { size: 45, type: WidthType.PERCENTAGE } }),
-        new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: 'Cantidad', bold: true })] })], width: { size: 15, type: WidthType.PERCENTAGE } }),
-        new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: 'Precio Unit.', bold: true })] })], width: { size: 15, type: WidthType.PERCENTAGE } }),
-        new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: 'Subtotal', bold: true })] })], width: { size: 20, type: WidthType.PERCENTAGE } })
+        new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: '#', bold: true, size: 18 })] })], width: { size: 5, type: WidthType.PERCENTAGE } }),
+        new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: 'Medicamento / Ítem', bold: true, size: 18 })] })], width: { size: 45, type: WidthType.PERCENTAGE } }),
+        new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: 'Cantidad', bold: true, size: 18 })] })], width: { size: 15, type: WidthType.PERCENTAGE } }),
+        new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: 'Precio Unit.', bold: true, size: 18 })] })], width: { size: 15, type: WidthType.PERCENTAGE } }),
+        new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: 'Subtotal', bold: true, size: 18 })] })], width: { size: 20, type: WidthType.PERCENTAGE } })
       ]
     }),
     ...despacho.medicamentos.map((item, idx) =>
@@ -265,52 +447,132 @@ export async function generarDOCXDespachoGlobal(despacho: DespachoGlobal, destDa
     sections: [
       {
         children: [
+          // Header Timbrado
           new Paragraph({
-            text: HOSPITAL_NAME,
-            heading: HeadingLevel.HEADING_1,
-            alignment: AlignmentType.CENTER
+            children: [
+              new TextRun({ text: 'Hospital Infantil\n', size: 22, color: '70B3D6' }),
+              new TextRun({ text: 'DR. JOSÉ MANUEL RODRÍGUEZ JIMÉNES', bold: true, size: 26, color: '4B9CD5' })
+            ],
+            alignment: AlignmentType.LEFT
           }),
           new Paragraph({
-            text: `${SYSTEM_TITLE} — COMPROBANTE OFICIAL DE DESPACHO`,
-            alignment: AlignmentType.CENTER
+            children: [
+              new TextRun({ text: `Santo Domingo, R.D. | ${fechaEspanol}`, size: 19, color: '0F172A' })
+            ],
+            alignment: AlignmentType.RIGHT
           }),
           new Paragraph({ text: '' }),
-          new Paragraph({ children: [new TextRun({ text: `Número de Despacho: ${despacho.numeroDespacho}`, bold: true, size: 24 })] }),
-          new Paragraph({ text: `Fecha y Hora: ${despacho.fecha} - ${despacho.hora}` }),
-          new Paragraph({ text: `Paciente: ${despacho.paciente}` }),
-          new Paragraph({ text: `Departamento: ${despacho.departamento}` }),
-          new Paragraph({ text: `Estado: ${despacho.estado}` }),
-          new Paragraph({ text: `Responsable: ${despacho.responsable}` }),
-          ...(destData ? [
-            new Paragraph({ text: `Destino: ${destData.nombre} (${destData.cargo})` })
-          ] : []),
+
+          // Encabezado destinatario
+          new Paragraph({ children: [new TextRun({ text: `A: ${receptorCargo}`, size: 20 })] }),
+          new Paragraph({ children: [new TextRun({ text: receptorNombre, bold: true, size: 22 })] }),
+          new Paragraph({ children: [new TextRun({ text: `Asunto: Comprobante de Despacho de Medicamentos — No. ${despacho.numeroDespacho}`, bold: true, size: 20 })] }),
           new Paragraph({ text: '' }),
-          new Paragraph({ children: [new TextRun({ text: 'Detalle de Medicamentos:', bold: true })] }),
+
+          // Cuerpo formal
+          new Paragraph({
+            children: [
+              new TextRun({
+                text: 'Por medio de la presente correspondencia oficial, se emite constancia formal respecto a la novedad o certificación técnica descrita a continuación:',
+                size: 20
+              })
+            ]
+          }),
+          new Paragraph({ text: '' }),
+          new Paragraph({
+            children: [
+              new TextRun({
+                text: `Se hace constar formalmente el despacho y entrega de los medicamentos e insumos hospitalarios detallados a continuación, asignados al paciente/servicio ${despacho.paciente} en el área de ${despacho.departamento}:`,
+                size: 20
+              })
+            ]
+          }),
+          new Paragraph({ text: '' }),
+
           new Table({
             rows: tableRows,
             width: { size: 100, type: WidthType.PERCENTAGE }
           }),
           new Paragraph({ text: '' }),
-          new Paragraph({ children: [new TextRun({ text: `TOTAL GENERAL: $${despacho.totales ? despacho.totales.toFixed(2) : '0.00'}`, bold: true, size: 22 })] }),
-          ...(despacho.observaciones ? [new Paragraph({ text: `Observaciones: ${despacho.observaciones}` })] : []),
+
+          new Paragraph({
+            children: [new TextRun({ text: `TOTAL GENERAL: $${despacho.totales ? despacho.totales.toFixed(2) : '0.00'}`, bold: true, size: 22 })]
+          }),
+          new Paragraph({ text: '' }),
+
+          ...(despacho.observaciones ? [
+            new Paragraph({
+              children: [
+                new TextRun({ text: 'Observaciones: ', bold: true, size: 18 }),
+                new TextRun({ text: despacho.observaciones, size: 18, italics: true })
+              ]
+            }),
+            new Paragraph({ text: '' })
+          ] : []),
+
+          new Paragraph({
+            children: [
+              new TextRun({
+                text: 'Para que así conste a los fines institucionales correspondientes, se suscribe el presente documento.',
+                size: 20
+              })
+            ]
+          }),
+          new Paragraph({ text: '' }),
+          new Paragraph({ children: [new TextRun({ text: 'Atentamente,', size: 20 })] }),
           new Paragraph({ text: '' }),
           new Paragraph({ text: '' }),
-          new Paragraph({ text: '_____________________________          _____________________________', alignment: AlignmentType.CENTER }),
-          new Paragraph({ text: 'Entregó Conforme                                 Recibió Conforme', alignment: AlignmentType.CENTER }),
+
+          // Firmas
+          new Paragraph({
+            children: [new TextRun({ text: '_____________________________________', bold: true })],
+            alignment: AlignmentType.LEFT
+          }),
+          new Paragraph({
+            children: [new TextRun({ text: 'Recibido por', bold: true, size: 20 })],
+            alignment: AlignmentType.LEFT
+          }),
+          new Paragraph({
+            children: [new TextRun({ text: receptorNombre, size: 18, color: '64748B' })],
+            alignment: AlignmentType.LEFT
+          }),
           new Paragraph({ text: '' }),
-          new Paragraph({ children: [new TextRun({ text: `Generado el ${fechaImpresion} a las ${horaImpresion}`, size: 16 })], alignment: AlignmentType.RIGHT })
+          new Paragraph({
+            children: [new TextRun({ text: '________________________________________________', bold: true })],
+            alignment: AlignmentType.CENTER
+          }),
+          new Paragraph({
+            children: [new TextRun({ text: despacho.responsable || 'José Miguel Mesa Romero', bold: true, size: 20 })],
+            alignment: AlignmentType.CENTER
+          }),
+          new Paragraph({
+            children: [new TextRun({ text: 'Encargado de Almacén y Suministros', size: 18, color: '64748B' })],
+            alignment: AlignmentType.CENTER
+          }),
+          new Paragraph({ text: '' }),
+          new Paragraph({ text: '' }),
+
+          // Footer Institucional
+          new Paragraph({
+            children: [
+              new TextRun({ text: 'Calle 28 Esq. Calle 39, Ens. La Fe, Sto. Dgo. D.N. R.D.\n', size: 15, color: '58A0BE' }),
+              new TextRun({ text: 'Telefono : 809-566-3322 | E-mail: direccion@hijmr.gob.do\n', size: 15, color: '58A0BE' }),
+              new TextRun({ text: 'RNC 430040495 | www.hijmr.gob.do | SRS METROPOLITANO', size: 15, color: '58A0BE' })
+            ],
+            alignment: AlignmentType.CENTER
+          })
         ]
       }
     ]
   });
 
   const blob = await Packer.toBlob(doc);
-  saveAs(blob, `Despacho_${despacho.numeroDespacho}.docx`);
+  saveAs(blob, `Carta_Despacho_${despacho.numeroDespacho}.docx`);
 }
 
-// Full History Despachos DOCX
+// Full History Despachos DOCX (Timbrado)
 export async function generarDOCXHistorialDespachos(despachos: DespachoGlobal[], destData?: ExportDestinoData) {
-  const { fecha: fechaImpresion, hora: horaImpresion } = getFormattedNow();
+  const fechaEspanol = getFormattedSpanishDate();
 
   const tableRows = [
     new TableRow({
@@ -345,333 +607,31 @@ export async function generarDOCXHistorialDespachos(despachos: DespachoGlobal[],
     sections: [
       {
         children: [
-          new Paragraph({ text: HOSPITAL_NAME, heading: HeadingLevel.HEADING_1, alignment: AlignmentType.CENTER }),
-          new Paragraph({ text: `${SYSTEM_TITLE} — HISTORIAL COMPLETO DE DESPACHOS`, alignment: AlignmentType.CENTER }),
+          new Paragraph({
+            children: [
+              new TextRun({ text: 'Hospital Infantil\n', size: 22, color: '70B3D6' }),
+              new TextRun({ text: 'DR. JOSÉ MANUEL RODRÍGUEZ JIMÉNES\n', bold: true, size: 26, color: '4B9CD5' }),
+              new TextRun({ text: `${SYSTEM_TITLE} — HISTORIAL COMPLETO DE DESPACHOS`, bold: true, size: 20, color: '0F172A' })
+            ],
+            alignment: AlignmentType.CENTER
+          }),
+          new Paragraph({
+            children: [new TextRun({ text: `Santo Domingo, R.D. | ${fechaEspanol}`, size: 19, color: '0F172A' })],
+            alignment: AlignmentType.RIGHT
+          }),
           ...(destData ? [new Paragraph({ text: `Dirigido a: ${destData.nombre} (${destData.cargo})`, alignment: AlignmentType.RIGHT })] : []),
           new Paragraph({ text: '' }),
           new Table({ rows: tableRows, width: { size: 100, type: WidthType.PERCENTAGE } }),
           new Paragraph({ text: '' }),
           new Paragraph({ children: [new TextRun({ text: `TOTAL REGISTROS: ${despachos.length} | MONTO ACUMULADO: $${totalSuma.toFixed(2)}`, bold: true })] }),
-          new Paragraph({ text: `Generado el ${fechaImpresion} a las ${horaImpresion}`, alignment: AlignmentType.RIGHT })
-        ]
-      }
-    ]
-  });
-
-  const blob = await Packer.toBlob(doc);
-  saveAs(blob, `Historial_Despachos_${fechaImpresion.replace(/\//g, '-')}.docx`);
-}
-
-// ==========================================
-// 2. SALIDAS DE ALMACÉN
-// ==========================================
-
-export function generarPDFSalidaAlmacen(salida: SalidaAlmacen, destData?: ExportDestinoData) {
-  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-  const pageWidth = doc.internal.pageSize.getWidth();
-  const { fecha: fechaImpresion, hora: horaImpresion } = getFormattedNow();
-
-  doc.setFillColor(15, 23, 42);
-  doc.rect(0, 0, pageWidth, 30, 'F');
-
-  doc.setTextColor(255, 255, 255);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(13);
-  doc.text(HOSPITAL_NAME, 14, 12);
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8.5);
-  doc.setTextColor(148, 163, 184);
-  doc.text(`${SYSTEM_TITLE} — REGISTRO OFICIAL DE SALIDA DE ALMACÉN`, 14, 18);
-
-  let y = 38;
-
-  doc.setFillColor(248, 250, 252);
-  doc.setDrawColor(226, 232, 240);
-  doc.roundedRect(14, y, pageWidth - 28, 44, 3, 3, 'FD');
-
-  doc.setTextColor(15, 23, 42);
-  doc.setFontSize(9.5);
-  doc.setFont('helvetica', 'bold');
-  doc.text(`Tipo de Salida: ${salida.tipoSalida}`, 20, y + 8);
-  doc.text(`Categoría: ${salida.categoriaBien}`, pageWidth - 80, y + 8);
-
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8.5);
-  doc.text(`Fecha/Hora: ${salida.fecha} — ${salida.hora}`, 20, y + 16);
-  doc.text(`Depto. Solicitante: ${salida.departamentoSolicitante}`, 20, y + 23);
-  doc.text(`Entregado por: ${salida.personaEntrega}`, 20, y + 30);
-  doc.text(`Recibido por: ${destData ? destData.nombre : salida.personaRecibe}`, 20, y + 37);
-
-  doc.text(`Registrado por: ${salida.usuarioRegistro}`, pageWidth - 80, y + 16);
-  doc.text(`Cantidad Total: ${salida.cantidad} ${salida.unidad}`, pageWidth - 80, y + 23);
-
-  y += 50;
-
-  const tableBody = (salida.itemsList && salida.itemsList.length > 0)
-    ? salida.itemsList.map((item, idx) => [
-        (idx + 1).toString(),
-        item.items,
-        item.descripcion || 'Sin especificaciones',
-        `${item.cantidad} ${item.unidad || 'u.'}`,
-        item.categoriaBien || salida.categoriaBien
-      ])
-    : [[ '1', salida.items, salida.descripcion || 'Sin especificaciones', `${salida.cantidad} ${salida.unidad}`, salida.categoriaBien ]];
-
-  autoTable(doc, {
-    startY: y,
-    head: [['#', 'Ítem / Bien Insumo', 'Descripción / Marca / Lote', 'Cantidad', 'Categoría']],
-    body: tableBody,
-    theme: 'grid',
-    headStyles: { fillColor: [15, 118, 110], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 8.5 },
-    bodyStyles: { fontSize: 8, textColor: [51, 65, 85] }
-  });
-
-  const finalY = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable?.finalY || y + 30;
-
-  if (salida.observaciones) {
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(8.5);
-    doc.text('Observaciones:', 14, finalY + 10);
-    doc.setFont('helvetica', 'normal');
-    doc.text(salida.observaciones, 14, finalY + 15, { maxWidth: pageWidth - 28 });
-  }
-
-  const sigY = Math.max(finalY + 40, 220);
-  doc.setDrawColor(148, 163, 184);
-  doc.line(25, sigY, 85, sigY);
-  doc.line(pageWidth - 85, sigY, pageWidth - 25, sigY);
-
-  doc.setFontSize(8);
-  doc.setFont('helvetica', 'bold');
-  doc.text('Firma Persona que Entrega', 55, sigY + 5, { align: 'center' });
-  doc.text('Firma Persona que Recibe', pageWidth - 55, sigY + 5, { align: 'center' });
-
-  doc.setFontSize(7);
-  doc.setTextColor(148, 163, 184);
-  doc.text(`Hospital Supply Manager | Impreso el ${fechaImpresion} a las ${horaImpresion}`, pageWidth / 2, 285, { align: 'center' });
-
-  doc.save(`Salida_Almacen_${salida.fecha.replace(/\//g, '-')}.pdf`);
-}
-
-export async function generarDOCXSalidaAlmacen(salida: SalidaAlmacen, destData?: ExportDestinoData) {
-  const { fecha: fechaImpresion, hora: horaImpresion } = getFormattedNow();
-  const receptorNombre = destData ? destData.nombre : salida.personaRecibe;
-  const receptorCargo = destData ? destData.cargo : salida.departamentoSolicitante;
-  const receptorDependencia = destData?.dependencia ? ` (${destData.dependencia})` : '';
-
-  const doc = new Document({
-    sections: [
-      {
-        properties: {},
-        children: [
-          // Header / Encabezado Hospitalario
+          new Paragraph({ text: '' }),
+          // Footer Institucional
           new Paragraph({
             children: [
-              new TextRun({ text: HOSPITAL_NAME, bold: true, size: 26, color: '0F172A' })
+              new TextRun({ text: 'Calle 28 Esq. Calle 39, Ens. La Fe, Sto. Dgo. D.N. R.D. | Telefono: 809-566-3322 | E-mail: direccion@hijmr.gob.do\n', size: 14, color: '58A0BE' }),
+              new TextRun({ text: 'RNC 430040495 | www.hijmr.gob.do | SRS METROPOLITANO', size: 14, color: '58A0BE' })
             ],
             alignment: AlignmentType.CENTER
-          }),
-          new Paragraph({
-            children: [
-              new TextRun({ text: `${SYSTEM_TITLE} — DEPARTAMENTO DE ALMACÉN CENTRAL`, bold: true, size: 18, color: '0E7490' })
-            ],
-            alignment: AlignmentType.CENTER
-          }),
-          new Paragraph({
-            children: [
-              new TextRun({ text: 'Sub-dirección de Gestión de Suministros e Insumos Hospitalarios', italics: true, size: 16, color: '475569' })
-            ],
-            alignment: AlignmentType.CENTER
-          }),
-          new Paragraph({ text: '' }),
-          
-          // Fecha y Lugar estilo carta
-          new Paragraph({
-            children: [
-              new TextRun({ text: `Santo Domingo, R.D. — ${salida.fecha} (${salida.hora})`, bold: true, size: 20 })
-            ],
-            alignment: AlignmentType.RIGHT
-          }),
-          new Paragraph({ text: '' }),
-
-          // Encabezado Tipo Oficio / Carta
-          new Paragraph({
-            children: [
-              new TextRun({ text: 'CARTA OFICIO DE SALIDA DE BIENES E INSUMOS', bold: true, size: 22, color: '0F172A' })
-            ],
-            alignment: AlignmentType.LEFT
-          }),
-          new Paragraph({ text: '' }),
-
-          new Paragraph({
-            children: [
-              new TextRun({ text: 'PARA: ', bold: true, size: 20 }),
-              new TextRun({ text: `${receptorNombre.toUpperCase()}`, bold: true, size: 20 }),
-            ]
-          }),
-          new Paragraph({
-            children: [
-              new TextRun({ text: 'CARGO / DEPTO: ', bold: true, size: 20 }),
-              new TextRun({ text: `${receptorCargo}${receptorDependencia}`, size: 20 }),
-            ]
-          }),
-          new Paragraph({
-            children: [
-              new TextRun({ text: 'DE: ', bold: true, size: 20 }),
-              new TextRun({ text: `${salida.personaEntrega} (Almacén Central)`, size: 20 }),
-            ]
-          }),
-          new Paragraph({
-            children: [
-              new TextRun({ text: 'ASUNTO: ', bold: true, size: 20 }),
-              new TextRun({ text: `Despacho Oficial de ${salida.categoriaBien} — Modalidad: ${salida.tipoSalida}`, size: 20 }),
-            ]
-          }),
-          new Paragraph({ text: '' }),
-
-          // Cuerpo de la Carta
-          new Paragraph({
-            children: [
-              new TextRun({ text: 'Estimado(a) Señor(a):', bold: true, size: 20 })
-            ]
-          }),
-          new Paragraph({ text: '' }),
-          new Paragraph({
-            children: [
-              new TextRun({
-                text: 'Por medio de la presente comunicación oficial, se hace entrega formal de los bienes e insumos correspondientes a la categoría de ',
-                size: 20
-              }),
-              new TextRun({ text: `${salida.categoriaBien}`, bold: true, size: 20 }),
-              new TextRun({
-                text: ', solicitados para el área o departamento de ',
-                size: 20
-              }),
-              new TextRun({ text: `${salida.departamentoSolicitante}`, bold: true, size: 20 }),
-              new TextRun({
-                text: '. Los detalles del despacho procesado bajo la modalidad de ',
-                size: 20
-              }),
-              new TextRun({ text: `${salida.tipoSalida}`, bold: true, size: 20 }),
-              new TextRun({
-                text: ' se especifican a continuación:',
-                size: 20
-              })
-            ]
-          }),
-          new Paragraph({ text: '' }),
-
-          // Tabla de los Ítems Despachados
-          new Table({
-            width: { size: 100, type: WidthType.PERCENTAGE },
-            rows: [
-              new TableRow({
-                children: [
-                  new TableCell({
-                    children: [new Paragraph({ children: [new TextRun({ text: 'Ítem / Bien Despachado', bold: true, size: 18 })] })],
-                    width: { size: 35, type: WidthType.PERCENTAGE }
-                  }),
-                  new TableCell({
-                    children: [new Paragraph({ children: [new TextRun({ text: 'Descripción / Marca / Lote', bold: true, size: 18 })] })],
-                    width: { size: 35, type: WidthType.PERCENTAGE }
-                  }),
-                  new TableCell({
-                    children: [new Paragraph({ children: [new TextRun({ text: 'Cantidad', bold: true, size: 18 })] })],
-                    width: { size: 15, type: WidthType.PERCENTAGE }
-                  }),
-                  new TableCell({
-                    children: [new Paragraph({ children: [new TextRun({ text: 'Unidad', bold: true, size: 18 })] })],
-                    width: { size: 15, type: WidthType.PERCENTAGE }
-                  })
-                ]
-              }),
-              ...((salida.itemsList && salida.itemsList.length > 0)
-                ? salida.itemsList.map(item => new TableRow({
-                    children: [
-                      new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: item.items, bold: true, size: 18 })] })] }),
-                      new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: item.descripcion || 'Sin descripción', size: 18 })] })] }),
-                      new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: item.cantidad.toString(), bold: true, size: 18 })] })] }),
-                      new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: item.unidad || 'u.', size: 18 })] })] })
-                    ]
-                  }))
-                : [
-                    new TableRow({
-                      children: [
-                        new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: salida.items, bold: true, size: 18 })] })] }),
-                        new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: salida.descripcion, size: 18 })] })] }),
-                        new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: salida.cantidad.toString(), bold: true, size: 18 })] })] }),
-                        new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: salida.unidad, size: 18 })] })] })
-                      ]
-                    })
-                  ]
-              )
-            ]
-          }),
-          new Paragraph({ text: '' }),
-
-          // Observaciones si existen
-          ...(salida.observaciones ? [
-            new Paragraph({
-              children: [
-                new TextRun({ text: 'Observaciones / Notas Adicionales: ', bold: true, size: 18 }),
-                new TextRun({ text: salida.observaciones, size: 18, italics: true })
-              ]
-            }),
-            new Paragraph({ text: '' })
-          ] : []),
-
-          // Párrafo de Cierre de la Carta
-          new Paragraph({
-            children: [
-              new TextRun({
-                text: 'Favor verificar el estado físico y las cantidades de los materiales al momento de su recepción y retornar el presente oficio firmado y sellado como constancia de conformidad.',
-                size: 20
-              })
-            ]
-          }),
-          new Paragraph({ text: '' }),
-          new Paragraph({
-            children: [
-              new TextRun({ text: 'Sin otro particular a que hacer referencia, quedamos a su entera disposición.', size: 20 })
-            ]
-          }),
-          new Paragraph({ text: '' }),
-          new Paragraph({ text: '' }),
-
-          // Firmas estilo carta
-          new Paragraph({
-            children: [
-              new TextRun({
-                text: '_____________________________________          _____________________________________',
-                bold: true
-              })
-            ],
-            alignment: AlignmentType.CENTER
-          }),
-          new Paragraph({
-            children: [
-              new TextRun({ text: 'ENTREGADO POR                                            RECIBIDO CONFORME', bold: true, size: 18 })
-            ],
-            alignment: AlignmentType.CENTER
-          }),
-          new Paragraph({
-            children: [
-              new TextRun({ text: `${salida.personaEntrega}                                    ${receptorNombre}`, size: 16 })
-            ],
-            alignment: AlignmentType.CENTER
-          }),
-          new Paragraph({
-            children: [
-              new TextRun({ text: `Almacén Central - Depto. Suministros                ${salida.departamentoSolicitante}`, size: 15, italics: true })
-            ],
-            alignment: AlignmentType.CENTER
-          }),
-          new Paragraph({ text: '' }),
-          new Paragraph({
-            children: [
-              new TextRun({ text: `Documento certificado generado por Hospital Supply Manager el ${fechaImpresion} a las ${horaImpresion}`, size: 14, color: '94A3B8' })
-            ],
-            alignment: AlignmentType.RIGHT
           })
         ]
       }
@@ -679,32 +639,353 @@ export async function generarDOCXSalidaAlmacen(salida: SalidaAlmacen, destData?:
   });
 
   const blob = await Packer.toBlob(doc);
-  saveAs(blob, `Carta_Salida_Almacen_${salida.items.substring(0, 15).replace(/\s+/g, '_')}_${salida.fecha.replace(/\//g, '-')}.docx`);
+  saveAs(blob, `Historial_Despachos_${fechaEspanol.replace(/\s+/g, '_')}.docx`);
 }
 
-export function generarPDFListadoSalidas(salidas: SalidaAlmacen[], destData?: ExportDestinoData) {
-  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+// ==========================================
+// 2. SALIDAS DE ALMACÉN (TIMBRADO OFICIAL TIPO CARTA)
+// ==========================================
+
+export function generarPDFSalidaAlmacen(salida: SalidaAlmacen, destData?: ExportDestinoData) {
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'letter' });
   const pageWidth = doc.internal.pageSize.getWidth();
-  const { fecha: fechaImpresion, hora: horaImpresion } = getFormattedNow();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const fechaEspanol = getFormattedSpanishDate(salida.fecha);
 
-  doc.setFillColor(15, 23, 42);
-  doc.rect(0, 0, pageWidth, 28, 'F');
+  // 1. Dibujar Encabezado Timbrado Oficial
+  drawHospitalTimbradoHeader(doc, fechaEspanol);
 
-  doc.setTextColor(255, 255, 255);
+  // 2. Encabezado del Destinatario y Asunto
+  const cargoDestino = destData?.cargo || destData?.dependencia || salida.departamentoSolicitante || 'Departamento Solicitante';
+  const nombreDestino = destData?.nombre || salida.personaRecibe || 'Encargado(a) Solicitante';
+
+  let y = 48;
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(10);
+  doc.setTextColor(15, 23, 42);
+  doc.text(`A: ${cargoDestino}`, 18, y);
+
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(13);
-  doc.text(HOSPITAL_NAME, 14, 12);
+  doc.setFontSize(10.5);
+  doc.text(nombreDestino, 18, y + 6);
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10);
+  doc.text(`Asunto: Salida de Bienes e Insumos — Modalidad: ${salida.tipoSalida}`, 18, y + 12);
+
+  // 3. Cuerpo de la Carta Formal
+  y = 70;
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9.5);
+  doc.setTextColor(30, 41, 59);
+
+  const parrafoIntro = 'Por medio de la presente correspondencia oficial, se emite constancia formal respecto a la novedad o certificación técnica descrita a continuación:';
+  const lineasIntro = doc.splitTextToSize(parrafoIntro, pageWidth - 36);
+  doc.text(lineasIntro, 18, y);
+  y += (lineasIntro.length * 5) + 3;
+
+  const parrafoDetalle = `Se hace constar formalmente la entrega y salida física de almacén de los bienes e insumos correspondientes a la categoría de ${salida.categoriaBien}, solicitados para el área o departamento de ${salida.departamentoSolicitante}, procesados bajo la modalidad de ${salida.tipoSalida}, según el siguiente desglose técnico:`;
+  const lineasDetalle = doc.splitTextToSize(parrafoDetalle, pageWidth - 36);
+  doc.text(lineasDetalle, 18, y);
+  y += (lineasDetalle.length * 5) + 4;
+
+  // 4. Tabla de Ítems Despachados
+  const tableData = (salida.itemsList && salida.itemsList.length > 0)
+    ? salida.itemsList.map((item, idx) => [
+        (idx + 1).toString(),
+        item.items,
+        item.descripcion || 'Sin especificaciones adicionales',
+        `${item.cantidad} ${item.unidad || 'u.'}`,
+        item.categoriaBien || salida.categoriaBien
+      ])
+    : [[ '1', salida.items, salida.descripcion || 'Sin especificaciones adicionales', `${salida.cantidad} ${salida.unidad}`, salida.categoriaBien ]];
+
+  autoTable(doc, {
+    startY: y,
+    head: [['#', 'Ítem / Bien Despachado', 'Descripción / Marca / Lote', 'Cantidad', 'Categoría']],
+    body: tableData,
+    theme: 'grid',
+    headStyles: {
+      fillColor: [241, 245, 249],
+      textColor: [15, 23, 42],
+      fontStyle: 'bold',
+      fontSize: 8.5,
+      lineColor: [203, 213, 225],
+      lineWidth: 0.2
+    },
+    bodyStyles: {
+      fontSize: 8.5,
+      textColor: [51, 65, 85],
+      lineColor: [226, 232, 240],
+      lineWidth: 0.2
+    },
+    columnStyles: {
+      0: { cellWidth: 10, halign: 'center' },
+      1: { cellWidth: 55 },
+      2: { cellWidth: 55 },
+      3: { cellWidth: 25, halign: 'center', fontStyle: 'bold' },
+      4: { cellWidth: 31 }
+    },
+    margin: { left: 18, right: 18 }
+  });
+
+  const finalY = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable?.finalY || y + 30;
+  let nextY = finalY + 6;
+
+  if (salida.observaciones) {
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8.5);
+    doc.setTextColor(15, 23, 42);
+    doc.text('Observaciones:', 18, nextY);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(71, 85, 105);
+    const obsLines = doc.splitTextToSize(salida.observaciones, pageWidth - 36);
+    doc.text(obsLines, 18, nextY + 4.5);
+    nextY += (obsLines.length * 4.5) + 3;
+  }
+
+  // Párrafo de cierre
+  const parrafoCierre = 'Para que así conste a los fines institucionales correspondientes, se suscribe el presente documento.';
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9.5);
+  doc.setTextColor(30, 41, 59);
+  doc.text(parrafoCierre, 18, nextY);
+  nextY += 6;
+
+  doc.text('Atentamente,', 18, nextY);
+
+  // 5. Firmas
+  const sigY = Math.min(Math.max(nextY + 18, 195), pageHeight - 55);
+
+  doc.setDrawColor(15, 23, 42);
+  doc.setLineWidth(0.4);
+  doc.line(18, sigY, 78, sigY);
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9.5);
+  doc.setTextColor(15, 23, 42);
+  doc.text('Recibido por', 18, sigY + 5);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  doc.setTextColor(71, 85, 105);
+  doc.text(nombreDestino, 18, sigY + 9);
+
+  // Firma Emisor
+  const sigCenterX = pageWidth / 2 + 15;
+  doc.line(sigCenterX - 38, sigY + 18, sigCenterX + 38, sigY + 18);
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9.5);
+  doc.setTextColor(15, 23, 42);
+  doc.text(salida.personaEntrega || 'José Miguel Mesa Romero', sigCenterX, sigY + 23, { align: 'center' });
 
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8.5);
-  doc.setTextColor(148, 163, 184);
-  doc.text(`${SYSTEM_TITLE} — LISTADO GENERAL DE SALIDAS DE ALMACÉN`, 14, 19);
+  doc.setTextColor(71, 85, 105);
+  doc.text('Encargado de Almacén y Suministros', sigCenterX, sigY + 27.5, { align: 'center' });
+
+  // 6. Pie de Página Timbrado Oficial
+  drawHospitalTimbradoFooter(doc);
+
+  const cleanItem = (salida.items || 'Insumos').substring(0, 15).replace(/\s+/g, '_');
+  doc.save(`Carta_Salida_Almacen_${cleanItem}_${salida.fecha.replace(/\//g, '-')}.pdf`);
+}
+
+export async function generarDOCXSalidaAlmacen(salida: SalidaAlmacen, destData?: ExportDestinoData) {
+  const fechaEspanol = getFormattedSpanishDate(salida.fecha);
+  const cargoDestino = destData?.cargo || destData?.dependencia || salida.departamentoSolicitante || 'Departamento Solicitante';
+  const nombreDestino = destData?.nombre || salida.personaRecibe || 'Encargado(a) Solicitante';
+
+  const tableRows = [
+    new TableRow({
+      children: [
+        new TableCell({
+          children: [new Paragraph({ children: [new TextRun({ text: 'Ítem / Bien Despachado', bold: true, size: 18 })] })],
+          width: { size: 35, type: WidthType.PERCENTAGE }
+        }),
+        new TableCell({
+          children: [new Paragraph({ children: [new TextRun({ text: 'Descripción / Marca / Lote', bold: true, size: 18 })] })],
+          width: { size: 35, type: WidthType.PERCENTAGE }
+        }),
+        new TableCell({
+          children: [new Paragraph({ children: [new TextRun({ text: 'Cantidad', bold: true, size: 18 })] })],
+          width: { size: 15, type: WidthType.PERCENTAGE }
+        }),
+        new TableCell({
+          children: [new Paragraph({ children: [new TextRun({ text: 'Categoría', bold: true, size: 18 })] })],
+          width: { size: 15, type: WidthType.PERCENTAGE }
+        })
+      ]
+    }),
+    ...((salida.itemsList && salida.itemsList.length > 0)
+      ? salida.itemsList.map(item => new TableRow({
+          children: [
+            new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: item.items, bold: true, size: 18 })] })] }),
+            new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: item.descripcion || 'Sin descripción', size: 18 })] })] }),
+            new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: `${item.cantidad} ${item.unidad || 'u.'}`, bold: true, size: 18 })] })] }),
+            new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: item.categoriaBien || salida.categoriaBien, size: 18 })] })] })
+          ]
+        }))
+      : [
+          new TableRow({
+            children: [
+              new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: salida.items, bold: true, size: 18 })] })] }),
+              new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: salida.descripcion, size: 18 })] })] }),
+              new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: `${salida.cantidad} ${salida.unidad}`, bold: true, size: 18 })] })] }),
+              new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: salida.categoriaBien, size: 18 })] })] })
+            ]
+          })
+        ]
+    )
+  ];
+
+  const doc = new Document({
+    sections: [
+      {
+        properties: {},
+        children: [
+          // Header Timbrado
+          new Paragraph({
+            children: [
+              new TextRun({ text: 'Hospital Infantil\n', size: 22, color: '70B3D6' }),
+              new TextRun({ text: 'DR. JOSÉ MANUEL RODRÍGUEZ JIMÉNES', bold: true, size: 26, color: '4B9CD5' })
+            ],
+            alignment: AlignmentType.LEFT
+          }),
+          new Paragraph({
+            children: [
+              new TextRun({ text: `Santo Domingo, R.D. | ${fechaEspanol}`, size: 19, color: '0F172A' })
+            ],
+            alignment: AlignmentType.RIGHT
+          }),
+          new Paragraph({ text: '' }),
+
+          // Encabezado destinatario
+          new Paragraph({ children: [new TextRun({ text: `A: ${cargoDestino}`, size: 20 })] }),
+          new Paragraph({ children: [new TextRun({ text: nombreDestino, bold: true, size: 22 })] }),
+          new Paragraph({ children: [new TextRun({ text: `Asunto: Salida de Bienes e Insumos — Modalidad: ${salida.tipoSalida}`, bold: true, size: 20 })] }),
+          new Paragraph({ text: '' }),
+
+          // Cuerpo formal
+          new Paragraph({
+            children: [
+              new TextRun({
+                text: 'Por medio de la presente correspondencia oficial, se emite constancia formal respecto a la novedad o certificación técnica descrita a continuación:',
+                size: 20
+              })
+            ]
+          }),
+          new Paragraph({ text: '' }),
+          new Paragraph({
+            children: [
+              new TextRun({
+                text: `Se hace constar formalmente la entrega y salida física de almacén de los bienes e insumos correspondientes a la categoría de ${salida.categoriaBien}, solicitados para el área o departamento de ${salida.departamentoSolicitante}, procesados bajo la modalidad de ${salida.tipoSalida}, según el siguiente desglose técnico:`,
+                size: 20
+              })
+            ]
+          }),
+          new Paragraph({ text: '' }),
+
+          new Table({
+            rows: tableRows,
+            width: { size: 100, type: WidthType.PERCENTAGE }
+          }),
+          new Paragraph({ text: '' }),
+
+          ...(salida.observaciones ? [
+            new Paragraph({
+              children: [
+                new TextRun({ text: 'Observaciones: ', bold: true, size: 18 }),
+                new TextRun({ text: salida.observaciones, size: 18, italics: true })
+              ]
+            }),
+            new Paragraph({ text: '' })
+          ] : []),
+
+          new Paragraph({
+            children: [
+              new TextRun({
+                text: 'Para que así conste a los fines institucionales correspondientes, se suscribe el presente documento.',
+                size: 20
+              })
+            ]
+          }),
+          new Paragraph({ text: '' }),
+          new Paragraph({ children: [new TextRun({ text: 'Atentamente,', size: 20 })] }),
+          new Paragraph({ text: '' }),
+          new Paragraph({ text: '' }),
+
+          // Firmas
+          new Paragraph({
+            children: [new TextRun({ text: '_____________________________________', bold: true })],
+            alignment: AlignmentType.LEFT
+          }),
+          new Paragraph({
+            children: [new TextRun({ text: 'Recibido por', bold: true, size: 20 })],
+            alignment: AlignmentType.LEFT
+          }),
+          new Paragraph({
+            children: [new TextRun({ text: nombreDestino, size: 18, color: '64748B' })],
+            alignment: AlignmentType.LEFT
+          }),
+          new Paragraph({ text: '' }),
+          new Paragraph({
+            children: [new TextRun({ text: '________________________________________________', bold: true })],
+            alignment: AlignmentType.CENTER
+          }),
+          new Paragraph({
+            children: [new TextRun({ text: salida.personaEntrega || 'José Miguel Mesa Romero', bold: true, size: 20 })],
+            alignment: AlignmentType.CENTER
+          }),
+          new Paragraph({
+            children: [new TextRun({ text: 'Encargado de Almacén y Suministros', size: 18, color: '64748B' })],
+            alignment: AlignmentType.CENTER
+          }),
+          new Paragraph({ text: '' }),
+          new Paragraph({ text: '' }),
+
+          // Footer Institucional
+          new Paragraph({
+            children: [
+              new TextRun({ text: 'Calle 28 Esq. Calle 39, Ens. La Fe, Sto. Dgo. D.N. R.D.\n', size: 15, color: '58A0BE' }),
+              new TextRun({ text: 'Telefono : 809-566-3322 | E-mail: direccion@hijmr.gob.do\n', size: 15, color: '58A0BE' }),
+              new TextRun({ text: 'RNC 430040495 | www.hijmr.gob.do | SRS METROPOLITANO', size: 15, color: '58A0BE' })
+            ],
+            alignment: AlignmentType.CENTER
+          })
+        ]
+      }
+    ]
+  });
+
+  const blob = await Packer.toBlob(doc);
+  const cleanItem = (salida.items || 'Insumos').substring(0, 15).replace(/\s+/g, '_');
+  saveAs(blob, `Carta_Salida_Almacen_${cleanItem}_${salida.fecha.replace(/\//g, '-')}.docx`);
+}
+
+export function generarPDFListadoSalidas(salidas: SalidaAlmacen[], destData?: ExportDestinoData) {
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'letter' });
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const fechaEspanol = getFormattedSpanishDate();
+
+  // Header Timbrado
+  drawHospitalTimbradoHeader(doc, fechaEspanol);
+
+  let y = 46;
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(11);
+  doc.setTextColor(15, 23, 42);
+  doc.text('LISTADO GENERAL DE SALIDAS DE ALMACÉN', 18, y);
 
   if (destData) {
-    doc.setFontSize(8);
-    doc.setTextColor(226, 232, 240);
-    doc.text(`Destino: ${destData.nombre} (${destData.cargo})`, pageWidth - 14, 19, { align: 'right' });
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.setTextColor(71, 85, 105);
+    doc.text(`Destino: ${destData.nombre} (${destData.cargo})`, pageWidth - 18, y, { align: 'right' });
   }
+
+  y += 5;
 
   const tableData = salidas.map((item, idx) => [
     (idx + 1).toString(),
@@ -719,28 +1000,41 @@ export function generarPDFListadoSalidas(salidas: SalidaAlmacen[], destData?: Ex
   ]);
 
   autoTable(doc, {
-    startY: 34,
+    startY: y,
     head: [['#', 'Fecha/Hora', 'Tipo Salida', 'Categoría', 'Ítem / Bien', 'Cantidad', 'Depto Solicitante', 'Entrega', 'Recibe']],
     body: tableData,
     theme: 'grid',
-    headStyles: { fillColor: [15, 118, 110], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 8 },
-    bodyStyles: { fontSize: 7.5, textColor: [51, 65, 85] }
+    headStyles: {
+      fillColor: [241, 245, 249],
+      textColor: [15, 23, 42],
+      fontStyle: 'bold',
+      fontSize: 8,
+      lineColor: [203, 213, 225],
+      lineWidth: 0.2
+    },
+    bodyStyles: {
+      fontSize: 7.5,
+      textColor: [51, 65, 85],
+      lineColor: [226, 232, 240],
+      lineWidth: 0.2
+    },
+    margin: { left: 18, right: 18 }
   });
 
   const finalY = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable?.finalY || 100;
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(9);
-  doc.text(`TOTAL SALIDAS REGISTRADAS: ${salidas.length}`, 14, finalY + 8);
+  doc.setTextColor(15, 23, 42);
+  doc.text(`TOTAL SALIDAS REGISTRADAS: ${salidas.length}`, 18, finalY + 8);
 
-  doc.setFontSize(7);
-  doc.setTextColor(148, 163, 184);
-  doc.text(`Hospital Supply Manager | Impreso el ${fechaImpresion} a las ${horaImpresion}`, pageWidth / 2, 198, { align: 'center' });
+  // Footer Timbrado
+  drawHospitalTimbradoFooter(doc);
 
-  doc.save(`Listado_Salidas_${fechaImpresion.replace(/\//g, '-')}.pdf`);
+  doc.save(`Listado_Salidas_${fechaEspanol.replace(/\s+/g, '_')}.pdf`);
 }
 
 export async function generarDOCXListadoSalidas(salidas: SalidaAlmacen[], destData?: ExportDestinoData) {
-  const { fecha: fechaImpresion, hora: horaImpresion } = getFormattedNow();
+  const fechaEspanol = getFormattedSpanishDate();
 
   const tableRows = [
     new TableRow({
@@ -773,157 +1067,301 @@ export async function generarDOCXListadoSalidas(salidas: SalidaAlmacen[], destDa
     sections: [
       {
         children: [
-          new Paragraph({ text: HOSPITAL_NAME, heading: HeadingLevel.HEADING_1, alignment: AlignmentType.CENTER }),
-          new Paragraph({ text: `${SYSTEM_TITLE} — LISTADO COMPLETO DE SALIDAS`, alignment: AlignmentType.CENTER }),
+          new Paragraph({
+            children: [
+              new TextRun({ text: 'Hospital Infantil\n', size: 22, color: '70B3D6' }),
+              new TextRun({ text: 'DR. JOSÉ MANUEL RODRÍGUEZ JIMÉNES\n', bold: true, size: 26, color: '4B9CD5' }),
+              new TextRun({ text: `${SYSTEM_TITLE} — LISTADO COMPLETO DE SALIDAS`, bold: true, size: 20, color: '0F172A' })
+            ],
+            alignment: AlignmentType.CENTER
+          }),
+          new Paragraph({
+            children: [new TextRun({ text: `Santo Domingo, R.D. | ${fechaEspanol}`, size: 19, color: '0F172A' })],
+            alignment: AlignmentType.RIGHT
+          }),
           ...(destData ? [new Paragraph({ text: `Destino: ${destData.nombre} (${destData.cargo})`, alignment: AlignmentType.RIGHT })] : []),
           new Paragraph({ text: '' }),
           new Table({ rows: tableRows, width: { size: 100, type: WidthType.PERCENTAGE } }),
           new Paragraph({ text: '' }),
           new Paragraph({ children: [new TextRun({ text: `TOTAL REGISTROS: ${salidas.length}`, bold: true })] }),
-          new Paragraph({ text: `Generado el ${fechaImpresion} a las ${horaImpresion}`, alignment: AlignmentType.RIGHT })
+          new Paragraph({ text: '' }),
+          // Footer Institucional
+          new Paragraph({
+            children: [
+              new TextRun({ text: 'Calle 28 Esq. Calle 39, Ens. La Fe, Sto. Dgo. D.N. R.D. | Telefono: 809-566-3322 | E-mail: direccion@hijmr.gob.do\n', size: 14, color: '58A0BE' }),
+              new TextRun({ text: 'RNC 430040495 | www.hijmr.gob.do | SRS METROPOLITANO', size: 14, color: '58A0BE' })
+            ],
+            alignment: AlignmentType.CENTER
+          })
         ]
       }
     ]
   });
 
   const blob = await Packer.toBlob(doc);
-  saveAs(blob, `Listado_Salidas_${fechaImpresion.replace(/\//g, '-')}.docx`);
+  saveAs(blob, `Listado_Salidas_${fechaEspanol.replace(/\s+/g, '_')}.docx`);
 }
 
 // ==========================================
-// 3. CONTROL DE AGUA PURIFICADA
+// 3. CONTROL DE AGUA PURIFICADA (TIMBRADO OFICIAL)
 // ==========================================
 
 export function generarPDFRegistroAgua(itemAgua: HistorialAgua, destData?: ExportDestinoData) {
-  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'letter' });
   const pageWidth = doc.internal.pageSize.getWidth();
-  const { fecha: fechaImpresion, hora: horaImpresion } = getFormattedNow();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const fechaEspanol = getFormattedSpanishDate(itemAgua.fecha);
 
-  doc.setFillColor(15, 23, 42);
-  doc.rect(0, 0, pageWidth, 30, 'F');
+  // 1. Dibujar Encabezado Timbrado Oficial
+  drawHospitalTimbradoHeader(doc, fechaEspanol);
 
-  doc.setTextColor(255, 255, 255);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(13);
-  doc.text(HOSPITAL_NAME, 14, 12);
+  // 2. Encabezado del Destinatario y Asunto
+  const cargoDestino = destData?.cargo || destData?.dependencia || itemAgua.departamento || 'Departamento / Servicio';
+  const nombreDestino = destData?.nombre || itemAgua.receptor || 'Encargado(a) Receptor';
+
+  let y = 48;
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8.5);
-  doc.setTextColor(148, 163, 184);
-  doc.text(`${SYSTEM_TITLE} — REGISTRO DE DESPACHO DE AGUA PURIFICADA`, 14, 18);
-
-  let y = 40;
-
-  doc.setFillColor(248, 250, 252);
-  doc.setDrawColor(226, 232, 240);
-  doc.roundedRect(14, y, pageWidth - 28, 42, 3, 3, 'FD');
-
-  doc.setTextColor(15, 23, 42);
   doc.setFontSize(10);
+  doc.setTextColor(15, 23, 42);
+  doc.text(`A: ${cargoDestino}`, 18, y);
+
   doc.setFont('helvetica', 'bold');
-  doc.text(`REGISTRO CONSECUTIVO NO: #${itemAgua.idConsecutivo}`, 20, y + 9);
+  doc.setFontSize(10.5);
+  doc.text(nombreDestino, 18, y + 6);
 
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10);
+  doc.text(`Asunto: Control de Despacho de Agua Purificada — Registro No. #${itemAgua.idConsecutivo}`, 18, y + 12);
+
+  // 3. Cuerpo de la Carta Formal
+  y = 70;
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8.5);
-  doc.text(`Fecha y Hora: ${itemAgua.fecha} — ${itemAgua.hora}`, 20, y + 17);
-  doc.text(`Departamento / Servicio: ${itemAgua.departamento}`, 20, y + 24);
-  doc.text(`Producto Entregado: ${itemAgua.producto}`, 20, y + 31);
-  doc.text(`Cantidad Despachada: ${itemAgua.cantidad} unidades`, 20, y + 38);
+  doc.setFontSize(9.5);
+  doc.setTextColor(30, 41, 59);
 
-  doc.text(`Frecuencia: ${itemAgua.frecuencia}`, pageWidth - 80, y + 17);
-  doc.text(`Responsable Entrega: ${itemAgua.responsable}`, pageWidth - 80, y + 24);
-  doc.text(`Receptor Conforme: ${destData ? destData.nombre : itemAgua.receptor}`, pageWidth - 80, y + 31);
+  const parrafoIntro = 'Por medio de la presente correspondencia oficial, se emite constancia formal respecto a la novedad o certificación técnica descrita a continuación:';
+  const lineasIntro = doc.splitTextToSize(parrafoIntro, pageWidth - 36);
+  doc.text(lineasIntro, 18, y);
+  y += (lineasIntro.length * 5) + 3;
 
-  y += 50;
+  const parrafoDetalle = `Se hace constar formalmente la entrega y suministro de agua purificada al departamento ${itemAgua.departamento} bajo la frecuencia programada ${itemAgua.frecuencia}, según el siguiente desglose:`;
+  const lineasDetalle = doc.splitTextToSize(parrafoDetalle, pageWidth - 36);
+  doc.text(lineasDetalle, 18, y);
+  y += (lineasDetalle.length * 5) + 4;
 
   autoTable(doc, {
     startY: y,
-    head: [['Departamento', 'Producto', 'Cantidad Entregada', 'Habilitado Stock', 'Pendiente Cuota']],
+    head: [['Departamento / Servicio', 'Producto Suministrado', 'Cantidad Entregada', 'Stock Habilitado', 'Pendiente en Cuota']],
     body: [
       [
         itemAgua.departamento,
         itemAgua.producto,
-        itemAgua.cantidad.toString(),
-        itemAgua.habilitado.toString(),
-        itemAgua.pendiente.toString()
+        `${itemAgua.cantidad} unidades`,
+        `${itemAgua.habilitado} u.`,
+        `${itemAgua.pendiente} u.`
       ]
     ],
     theme: 'grid',
-    headStyles: { fillColor: [2, 132, 199], textColor: [255, 255, 255], fontStyle: 'bold' }
+    headStyles: {
+      fillColor: [241, 245, 249],
+      textColor: [15, 23, 42],
+      fontStyle: 'bold',
+      fontSize: 8.5,
+      lineColor: [203, 213, 225],
+      lineWidth: 0.2
+    },
+    bodyStyles: {
+      fontSize: 8.5,
+      textColor: [51, 65, 85],
+      lineColor: [226, 232, 240],
+      lineWidth: 0.2
+    },
+    margin: { left: 18, right: 18 }
   });
 
-  const sigY = 220;
-  doc.setDrawColor(148, 163, 184);
-  doc.line(25, sigY, 85, sigY);
-  doc.line(pageWidth - 85, sigY, pageWidth - 25, sigY);
+  const finalY = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable?.finalY || y + 25;
+  let nextY = finalY + 8;
 
-  doc.setFontSize(8);
+  // Párrafo de cierre
+  const parrafoCierre = 'Para que así conste a los fines institucionales correspondientes, se suscribe el presente documento.';
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9.5);
+  doc.setTextColor(30, 41, 59);
+  doc.text(parrafoCierre, 18, nextY);
+  nextY += 6;
+
+  doc.text('Atentamente,', 18, nextY);
+
+  // 4. Firmas
+  const sigY = Math.min(Math.max(nextY + 18, 195), pageHeight - 55);
+
+  doc.setDrawColor(15, 23, 42);
+  doc.setLineWidth(0.4);
+  doc.line(18, sigY, 78, sigY);
+
   doc.setFont('helvetica', 'bold');
-  doc.text('Firma Responsable Almacén', 55, sigY + 5, { align: 'center' });
-  doc.text('Firma Receptor Departamento', pageWidth - 55, sigY + 5, { align: 'center' });
+  doc.setFontSize(9.5);
+  doc.setTextColor(15, 23, 42);
+  doc.text('Recibido por', 18, sigY + 5);
 
-  doc.setFontSize(7);
-  doc.setTextColor(148, 163, 184);
-  doc.text(`Hospital Supply Manager | Impreso el ${fechaImpresion} a las ${horaImpresion}`, pageWidth / 2, 285, { align: 'center' });
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  doc.setTextColor(71, 85, 105);
+  doc.text(nombreDestino, 18, sigY + 9);
 
-  doc.save(`Registro_Agua_${itemAgua.idConsecutivo}.pdf`);
+  // Firma Emisor
+  const sigCenterX = pageWidth / 2 + 15;
+  doc.line(sigCenterX - 38, sigY + 18, sigCenterX + 38, sigY + 18);
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9.5);
+  doc.setTextColor(15, 23, 42);
+  doc.text(itemAgua.responsable || 'José Miguel Mesa Romero', sigCenterX, sigY + 23, { align: 'center' });
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8.5);
+  doc.setTextColor(71, 85, 105);
+  doc.text('Encargado de Almacén y Suministros', sigCenterX, sigY + 27.5, { align: 'center' });
+
+  // 5. Pie de Página Timbrado Oficial
+  drawHospitalTimbradoFooter(doc);
+
+  doc.save(`Carta_Control_Agua_${itemAgua.idConsecutivo}.pdf`);
 }
 
 export async function generarDOCXRegistroAgua(itemAgua: HistorialAgua, destData?: ExportDestinoData) {
-  const { fecha: fechaImpresion, hora: horaImpresion } = getFormattedNow();
+  const fechaEspanol = getFormattedSpanishDate(itemAgua.fecha);
+  const cargoDestino = destData?.cargo || destData?.dependencia || itemAgua.departamento || 'Departamento / Servicio';
+  const nombreDestino = destData?.nombre || itemAgua.receptor || 'Encargado(a) Receptor';
 
   const doc = new Document({
     sections: [
       {
         children: [
-          new Paragraph({ text: HOSPITAL_NAME, heading: HeadingLevel.HEADING_1, alignment: AlignmentType.CENTER }),
-          new Paragraph({ text: `${SYSTEM_TITLE} — REGISTRO DE AGUA PURIFICADA`, alignment: AlignmentType.CENTER }),
+          // Header Timbrado
+          new Paragraph({
+            children: [
+              new TextRun({ text: 'Hospital Infantil\n', size: 22, color: '70B3D6' }),
+              new TextRun({ text: 'DR. JOSÉ MANUEL RODRÍGUEZ JIMÉNES', bold: true, size: 26, color: '4B9CD5' })
+            ],
+            alignment: AlignmentType.LEFT
+          }),
+          new Paragraph({
+            children: [
+              new TextRun({ text: `Santo Domingo, R.D. | ${fechaEspanol}`, size: 19, color: '0F172A' })
+            ],
+            alignment: AlignmentType.RIGHT
+          }),
           new Paragraph({ text: '' }),
-          new Paragraph({ text: `Consecutivo: #${itemAgua.idConsecutivo}`, heading: HeadingLevel.HEADING_2 }),
-          new Paragraph({ text: `Fecha / Hora: ${itemAgua.fecha} ${itemAgua.hora}` }),
-          new Paragraph({ text: `Departamento: ${itemAgua.departamento}` }),
-          new Paragraph({ text: `Producto: ${itemAgua.producto}` }),
-          new Paragraph({ text: `Cantidad Entregada: ${itemAgua.cantidad}` }),
-          new Paragraph({ text: `Habilitado en Stock: ${itemAgua.habilitado}` }),
-          new Paragraph({ text: `Pendiente en Cuota: ${itemAgua.pendiente}` }),
-          new Paragraph({ text: `Responsable: ${itemAgua.responsable}` }),
-          new Paragraph({ text: `Receptor: ${destData ? destData.nombre : itemAgua.receptor}` }),
+
+          // Encabezado destinatario
+          new Paragraph({ children: [new TextRun({ text: `A: ${cargoDestino}`, size: 20 })] }),
+          new Paragraph({ children: [new TextRun({ text: nombreDestino, bold: true, size: 22 })] }),
+          new Paragraph({ children: [new TextRun({ text: `Asunto: Control de Despacho de Agua Purificada — Registro No. #${itemAgua.idConsecutivo}`, bold: true, size: 20 })] }),
           new Paragraph({ text: '' }),
-          new Paragraph({ text: '_____________________________          _____________________________', alignment: AlignmentType.CENTER }),
-          new Paragraph({ text: 'Firma Responsable Almacén                       Firma Receptor', alignment: AlignmentType.CENTER }),
+
+          // Cuerpo formal
+          new Paragraph({
+            children: [
+              new TextRun({
+                text: 'Por medio de la presente correspondencia oficial, se emite constancia formal respecto a la novedad o certificación técnica descrita a continuación:',
+                size: 20
+              })
+            ]
+          }),
           new Paragraph({ text: '' }),
-          new Paragraph({ text: `Generado el ${fechaImpresion} a las ${horaImpresion}`, alignment: AlignmentType.RIGHT })
+          new Paragraph({
+            children: [
+              new TextRun({
+                text: `Se hace constar formalmente la entrega y suministro de agua purificada al departamento ${itemAgua.departamento} bajo la frecuencia programada ${itemAgua.frecuencia}, producto: ${itemAgua.producto}, cantidad: ${itemAgua.cantidad} unidades, stock habilitado: ${itemAgua.habilitado} u., pendiente: ${itemAgua.pendiente} u.`,
+                size: 20
+              })
+            ]
+          }),
+          new Paragraph({ text: '' }),
+
+          new Paragraph({
+            children: [
+              new TextRun({
+                text: 'Para que así conste a los fines institucionales correspondientes, se suscribe el presente documento.',
+                size: 20
+              })
+            ]
+          }),
+          new Paragraph({ text: '' }),
+          new Paragraph({ children: [new TextRun({ text: 'Atentamente,', size: 20 })] }),
+          new Paragraph({ text: '' }),
+          new Paragraph({ text: '' }),
+
+          // Firmas
+          new Paragraph({
+            children: [new TextRun({ text: '_____________________________________', bold: true })],
+            alignment: AlignmentType.LEFT
+          }),
+          new Paragraph({
+            children: [new TextRun({ text: 'Recibido por', bold: true, size: 20 })],
+            alignment: AlignmentType.LEFT
+          }),
+          new Paragraph({
+            children: [new TextRun({ text: nombreDestino, size: 18, color: '64748B' })],
+            alignment: AlignmentType.LEFT
+          }),
+          new Paragraph({ text: '' }),
+          new Paragraph({
+            children: [new TextRun({ text: '________________________________________________', bold: true })],
+            alignment: AlignmentType.CENTER
+          }),
+          new Paragraph({
+            children: [new TextRun({ text: itemAgua.responsable || 'José Miguel Mesa Romero', bold: true, size: 20 })],
+            alignment: AlignmentType.CENTER
+          }),
+          new Paragraph({
+            children: [new TextRun({ text: 'Encargado de Almacén y Suministros', size: 18, color: '64748B' })],
+            alignment: AlignmentType.CENTER
+          }),
+          new Paragraph({ text: '' }),
+          new Paragraph({ text: '' }),
+
+          // Footer Institucional
+          new Paragraph({
+            children: [
+              new TextRun({ text: 'Calle 28 Esq. Calle 39, Ens. La Fe, Sto. Dgo. D.N. R.D.\n', size: 15, color: '58A0BE' }),
+              new TextRun({ text: 'Telefono : 809-566-3322 | E-mail: direccion@hijmr.gob.do\n', size: 15, color: '58A0BE' }),
+              new TextRun({ text: 'RNC 430040495 | www.hijmr.gob.do | SRS METROPOLITANO', size: 15, color: '58A0BE' })
+            ],
+            alignment: AlignmentType.CENTER
+          })
         ]
       }
     ]
   });
 
   const blob = await Packer.toBlob(doc);
-  saveAs(blob, `Registro_Agua_${itemAgua.idConsecutivo}.docx`);
+  saveAs(blob, `Carta_Control_Agua_${itemAgua.idConsecutivo}.docx`);
 }
 
 export function generarPDFHistorialAgua(historial: HistorialAgua[], destData?: ExportDestinoData) {
-  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'letter' });
   const pageWidth = doc.internal.pageSize.getWidth();
-  const { fecha: fechaImpresion, hora: horaImpresion } = getFormattedNow();
+  const fechaEspanol = getFormattedSpanishDate();
 
-  doc.setFillColor(15, 23, 42);
-  doc.rect(0, 0, pageWidth, 28, 'F');
+  // Header Timbrado
+  drawHospitalTimbradoHeader(doc, fechaEspanol);
 
-  doc.setTextColor(255, 255, 255);
+  let y = 46;
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(13);
-  doc.text(HOSPITAL_NAME, 14, 12);
-
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8.5);
-  doc.setTextColor(148, 163, 184);
-  doc.text(`${SYSTEM_TITLE} — HISTORIAL DE ENTREGAS DE AGUA PURIFICADA`, 14, 19);
+  doc.setFontSize(11);
+  doc.setTextColor(15, 23, 42);
+  doc.text('HISTORIAL DE ENTREGAS DE AGUA PURIFICADA', 18, y);
 
   if (destData) {
-    doc.setFontSize(8);
-    doc.setTextColor(226, 232, 240);
-    doc.text(`Destino: ${destData.nombre} (${destData.cargo})`, pageWidth - 14, 19, { align: 'right' });
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.setTextColor(71, 85, 105);
+    doc.text(`Destino: ${destData.nombre} (${destData.cargo})`, pageWidth - 18, y, { align: 'right' });
   }
+
+  y += 5;
 
   const tableData = historial.map((item) => [
     `#${item.idConsecutivo}`,
@@ -937,11 +1375,25 @@ export function generarPDFHistorialAgua(historial: HistorialAgua[], destData?: E
   ]);
 
   autoTable(doc, {
-    startY: 34,
+    startY: y,
     head: [['No. Consecutivo', 'Fecha/Hora', 'Departamento', 'Producto', 'Cantidad', 'Frecuencia', 'Entregó', 'Recibió']],
     body: tableData,
     theme: 'grid',
-    headStyles: { fillColor: [2, 132, 199], textColor: [255, 255, 255], fontStyle: 'bold' }
+    headStyles: {
+      fillColor: [241, 245, 249],
+      textColor: [15, 23, 42],
+      fontStyle: 'bold',
+      fontSize: 8,
+      lineColor: [203, 213, 225],
+      lineWidth: 0.2
+    },
+    bodyStyles: {
+      fontSize: 7.5,
+      textColor: [51, 65, 85],
+      lineColor: [226, 232, 240],
+      lineWidth: 0.2
+    },
+    margin: { left: 18, right: 18 }
   });
 
   const totalCantidad = historial.reduce((acc, curr) => acc + (curr.cantidad || 0), 0);
@@ -949,17 +1401,17 @@ export function generarPDFHistorialAgua(historial: HistorialAgua[], destData?: E
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(9);
-  doc.text(`TOTAL REGISTROS: ${historial.length} | TOTAL UNIDADES DESPACHADAS: ${totalCantidad}`, 14, finalY + 8);
+  doc.setTextColor(15, 23, 42);
+  doc.text(`TOTAL REGISTROS: ${historial.length} | TOTAL UNIDADES DESPACHADAS: ${totalCantidad}`, 18, finalY + 8);
 
-  doc.setFontSize(7);
-  doc.setTextColor(148, 163, 184);
-  doc.text(`Hospital Supply Manager | Impreso el ${fechaImpresion} a las ${horaImpresion}`, pageWidth / 2, 198, { align: 'center' });
+  // Footer Timbrado
+  drawHospitalTimbradoFooter(doc);
 
-  doc.save(`Historial_Agua_${fechaImpresion.replace(/\//g, '-')}.pdf`);
+  doc.save(`Historial_Agua_${fechaEspanol.replace(/\s+/g, '_')}.pdf`);
 }
 
 export async function generarDOCXHistorialAgua(historial: HistorialAgua[], destData?: ExportDestinoData) {
-  const { fecha: fechaImpresion, hora: horaImpresion } = getFormattedNow();
+  const fechaEspanol = getFormattedSpanishDate();
 
   const tableRows = [
     new TableRow({
@@ -994,182 +1446,383 @@ export async function generarDOCXHistorialAgua(historial: HistorialAgua[], destD
     sections: [
       {
         children: [
-          new Paragraph({ text: HOSPITAL_NAME, heading: HeadingLevel.HEADING_1, alignment: AlignmentType.CENTER }),
-          new Paragraph({ text: `${SYSTEM_TITLE} — HISTORIAL DE AGUA PURIFICADA`, alignment: AlignmentType.CENTER }),
+          new Paragraph({
+            children: [
+              new TextRun({ text: 'Hospital Infantil\n', size: 22, color: '70B3D6' }),
+              new TextRun({ text: 'DR. JOSÉ MANUEL RODRÍGUEZ JIMÉNES\n', bold: true, size: 26, color: '4B9CD5' }),
+              new TextRun({ text: `${SYSTEM_TITLE} — HISTORIAL DE AGUA PURIFICADA`, bold: true, size: 20, color: '0F172A' })
+            ],
+            alignment: AlignmentType.CENTER
+          }),
+          new Paragraph({
+            children: [new TextRun({ text: `Santo Domingo, R.D. | ${fechaEspanol}`, size: 19, color: '0F172A' })],
+            alignment: AlignmentType.RIGHT
+          }),
           ...(destData ? [new Paragraph({ text: `Destino: ${destData.nombre} (${destData.cargo})`, alignment: AlignmentType.RIGHT })] : []),
           new Paragraph({ text: '' }),
           new Table({ rows: tableRows, width: { size: 100, type: WidthType.PERCENTAGE } }),
           new Paragraph({ text: '' }),
           new Paragraph({ children: [new TextRun({ text: `TOTAL REGISTROS: ${historial.length} | TOTAL UNIDADES: ${totalCantidad}`, bold: true })] }),
-          new Paragraph({ text: `Generado el ${fechaImpresion} a las ${horaImpresion}`, alignment: AlignmentType.RIGHT })
+          new Paragraph({ text: '' }),
+          // Footer Institucional
+          new Paragraph({
+            children: [
+              new TextRun({ text: 'Calle 28 Esq. Calle 39, Ens. La Fe, Sto. Dgo. D.N. R.D. | Telefono: 809-566-3322 | E-mail: direccion@hijmr.gob.do\n', size: 14, color: '58A0BE' }),
+              new TextRun({ text: 'RNC 430040495 | www.hijmr.gob.do | SRS METROPOLITANO', size: 14, color: '58A0BE' })
+            ],
+            alignment: AlignmentType.CENTER
+          })
         ]
       }
     ]
   });
 
   const blob = await Packer.toBlob(doc);
-  saveAs(blob, `Historial_Agua_${fechaImpresion.replace(/\//g, '-')}.docx`);
+  saveAs(blob, `Historial_Agua_${fechaEspanol.replace(/\s+/g, '_')}.docx`);
 }
 
 // ==========================================
-// 4. ENTRADAS DE MERCANCÍA
+// 4. ENTRADAS DE MERCANCÍA (DOCUMENTO TIPO CARTA TIMBRADA OFICIAL)
 // ==========================================
 
 export function generarPDFEntradaMercancia(entrada: EntradaMercancia, destData?: ExportDestinoData) {
-  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'letter' });
   const pageWidth = doc.internal.pageSize.getWidth();
-  const { fecha: fechaImpresion, hora: horaImpresion } = getFormattedNow();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const fechaEspanol = getFormattedSpanishDate(entrada.fecha);
 
-  doc.setFillColor(15, 23, 42);
-  doc.rect(0, 0, pageWidth, 30, 'F');
+  // 1. Dibujar Encabezado Timbrado Oficial (Logo H, Texto Hospital y Fecha)
+  drawHospitalTimbradoHeader(doc, fechaEspanol);
 
-  doc.setTextColor(255, 255, 255);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(13);
-  doc.text(HOSPITAL_NAME, 14, 12);
+  // 2. Encabezado del Destinatario y Asunto
+  let y = 48;
+  const cargoDestino = destData?.cargo || destData?.dependencia || 'Dirección General';
+  const nombreDestino = destData?.nombre || 'Dra. Indhira García moreno';
+
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8.5);
-  doc.setTextColor(148, 163, 184);
-  doc.text(`${SYSTEM_TITLE} — REGISTRO DE ENTRADA DE MERCANCÍA / RECEPCIÓN`, 14, 18);
-
-  let y = 38;
-
-  doc.setFillColor(248, 250, 252);
-  doc.setDrawColor(226, 232, 240);
-  doc.roundedRect(14, y, pageWidth - 28, 38, 3, 3, 'FD');
-
+  doc.setFontSize(10);
   doc.setTextColor(15, 23, 42);
-  doc.setFontSize(9.5);
+  doc.text(`A: ${cargoDestino}`, 18, y);
+
   doc.setFont('helvetica', 'bold');
-  doc.text(`Proveedor: ${entrada.proveedor}`, 20, y + 8);
-  doc.text(`No. Documento / Factura: ${entrada.documento}`, pageWidth - 90, y + 8);
+  doc.setFontSize(10.5);
+  doc.text(nombreDestino, 18, y + 6);
 
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10);
+  doc.text(`Asunto: Entrada de Mercancía — Conduce No. ${entrada.documento}`, 18, y + 12);
+
+  // 3. Cuerpo de la Carta Formal
+  y = 70;
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8.5);
-  doc.text(`Fecha/Hora: ${entrada.fecha} — ${entrada.hora}`, 20, y + 16);
-  doc.text(`Destino / Área: ${entrada.destino}`, 20, y + 23);
-  if (destData) {
-    doc.text(`Dirigido a: ${destData.nombre} (${destData.cargo})`, pageWidth - 90, y + 16);
-  }
+  doc.setFontSize(9.5);
+  doc.setTextColor(30, 41, 59);
 
-  y += 44;
+  const parrafoIntro = 'Por medio de la presente correspondencia oficial, se emite constancia formal respecto a la novedad o certificación técnica descrita a continuación:';
+  const lineasIntro = doc.splitTextToSize(parrafoIntro, pageWidth - 36);
+  doc.text(lineasIntro, 18, y);
+  y += (lineasIntro.length * 5) + 3;
 
+  const parrafoDetalle = `Se hace constar formalmente la recepción e ingreso en Almacén y Suministros de los insumos y bienes provistos por el proveedor ${entrada.proveedor}, amparados bajo el Conduce / Factura No. ${entrada.documento}, destinados al área de ${entrada.destino}, según el siguiente desglose técnico:`;
+  const lineasDetalle = doc.splitTextToSize(parrafoDetalle, pageWidth - 36);
+  doc.text(lineasDetalle, 18, y);
+  y += (lineasDetalle.length * 5) + 4;
+
+  // 4. Tabla Formal de Productos / Insumos
   const tableData = entrada.items.map((item, idx) => [
     (idx + 1).toString(),
     item.producto,
-    item.descripcion,
-    item.cantidad.toString()
+    item.descripcion || 'Sin descripción adicional',
+    `${item.cantidad} u.`
   ]);
 
   autoTable(doc, {
     startY: y,
-    head: [['#', 'Producto / Insumo', 'Descripción / Marca', 'Cantidad Recibida']],
+    head: [['#', 'Producto / Insumo', 'Descripción / Lote', 'Cantidad Recibida']],
     body: tableData,
     theme: 'grid',
-    headStyles: { fillColor: [16, 185, 129], textColor: [255, 255, 255], fontStyle: 'bold' }
+    headStyles: {
+      fillColor: [241, 245, 249],
+      textColor: [15, 23, 42],
+      fontStyle: 'bold',
+      fontSize: 8.5,
+      lineColor: [203, 213, 225],
+      lineWidth: 0.2
+    },
+    bodyStyles: {
+      fontSize: 8.5,
+      textColor: [51, 65, 85],
+      lineColor: [226, 232, 240],
+      lineWidth: 0.2
+    },
+    columnStyles: {
+      0: { cellWidth: 10, halign: 'center' },
+      1: { cellWidth: 72 },
+      2: { cellWidth: 64 },
+      3: { cellWidth: 30, halign: 'center', fontStyle: 'bold' }
+    },
+    margin: { left: 18, right: 18 }
   });
 
   const finalY = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable?.finalY || y + 30;
+  let nextY = finalY + 6;
 
+  // Observaciones si existen
   if (entrada.observaciones) {
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(8.5);
-    doc.text('Observaciones:', 14, finalY + 10);
+    doc.setTextColor(15, 23, 42);
+    doc.text('Observaciones de la Recepción:', 18, nextY);
     doc.setFont('helvetica', 'normal');
-    doc.text(entrada.observaciones, 14, finalY + 15, { maxWidth: pageWidth - 28 });
+    doc.setTextColor(71, 85, 105);
+    const obsLines = doc.splitTextToSize(entrada.observaciones, pageWidth - 36);
+    doc.text(obsLines, 18, nextY + 4.5);
+    nextY += (obsLines.length * 4.5) + 6;
   }
 
-  const sigY = Math.max(finalY + 40, 220);
-  doc.setDrawColor(148, 163, 184);
-  doc.line(25, sigY, 85, sigY);
-  doc.line(pageWidth - 85, sigY, pageWidth - 25, sigY);
+  // Párrafo de Cierre y Despedida
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9.5);
+  doc.setTextColor(30, 41, 59);
+  const parrafoCierre = 'Para que así conste a los fines institucionales correspondientes, se suscribe el presente documento.';
+  doc.text(parrafoCierre, 18, nextY);
+  nextY += 7;
 
-  doc.setFontSize(8);
+  doc.text('Atentamente,', 18, nextY);
+
+  // 5. Bloque de Firmas
+  const sigY = Math.min(Math.max(nextY + 20, 195), pageHeight - 55);
+
+  // Firma izquierda: Recibido por
+  doc.setDrawColor(15, 23, 42);
+  doc.setLineWidth(0.4);
+  doc.line(18, sigY, 78, sigY);
+
   doc.setFont('helvetica', 'bold');
-  doc.text('Firma Encargado de Almacén', 55, sigY + 5, { align: 'center' });
-  doc.text('Firma Transportista / Entregó', pageWidth - 55, sigY + 5, { align: 'center' });
+  doc.setFontSize(9.5);
+  doc.setTextColor(15, 23, 42);
+  doc.text('Recibido por', 18, sigY + 5);
 
-  doc.setFontSize(7);
-  doc.setTextColor(148, 163, 184);
-  doc.text(`Hospital Supply Manager | Impreso el ${fechaImpresion} a las ${horaImpresion}`, pageWidth / 2, 285, { align: 'center' });
+  if (destData?.nombre) {
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.setTextColor(71, 85, 105);
+    doc.text(destData.nombre, 18, sigY + 9);
+  }
 
-  doc.save(`Entrada_Mercancia_${entrada.documento}.pdf`);
+  // Firma centro / derecha: José Miguel Mesa Romero - Encargado de Almacén y Suministros
+  const sigCenterX = pageWidth / 2 + 15;
+  doc.line(sigCenterX - 38, sigY + 18, sigCenterX + 38, sigY + 18);
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9.5);
+  doc.setTextColor(15, 23, 42);
+  doc.text('José Miguel Mesa Romero', sigCenterX, sigY + 23, { align: 'center' });
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8.5);
+  doc.setTextColor(71, 85, 105);
+  doc.text('Encargado de Almacén y Suministros', sigCenterX, sigY + 27.5, { align: 'center' });
+
+  // 6. Pie de Página Timbrado Oficial
+  drawHospitalTimbradoFooter(doc);
+
+  doc.save(`Carta_Entrada_Mercancia_${entrada.documento.replace(/\s+/g, '_')}.pdf`);
 }
 
 export async function generarDOCXEntradaMercancia(entrada: EntradaMercancia, destData?: ExportDestinoData) {
-  const { fecha: fechaImpresion, hora: horaImpresion } = getFormattedNow();
+  const fechaEspanol = getFormattedSpanishDate(entrada.fecha);
+  const cargoDestino = destData?.cargo || destData?.dependencia || 'Dirección General';
+  const nombreDestino = destData?.nombre || 'Dra. Indhira García moreno';
+
+  const tableRows = [
+    new TableRow({
+      children: [
+        new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: '#', bold: true, size: 18 })] })], width: { size: 10, type: WidthType.PERCENTAGE } }),
+        new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: 'Producto / Insumo', bold: true, size: 18 })] })], width: { size: 45, type: WidthType.PERCENTAGE } }),
+        new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: 'Descripción / Lote', bold: true, size: 18 })] })], width: { size: 30, type: WidthType.PERCENTAGE } }),
+        new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: 'Cantidad Recibida', bold: true, size: 18 })] })], width: { size: 15, type: WidthType.PERCENTAGE } })
+      ]
+    }),
+    ...entrada.items.map((item, idx) =>
+      new TableRow({
+        children: [
+          new TableCell({ children: [new Paragraph({ text: (idx + 1).toString(), alignment: AlignmentType.CENTER })] }),
+          new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: item.producto, bold: true, size: 18 })] })] }),
+          new TableCell({ children: [new Paragraph(item.descripcion || 'Sin descripción')] }),
+          new TableCell({ children: [new Paragraph({ text: `${item.cantidad} u.`, alignment: AlignmentType.CENTER })] })
+        ]
+      })
+    )
+  ];
 
   const doc = new Document({
     sections: [
       {
+        properties: {},
         children: [
-          new Paragraph({ text: HOSPITAL_NAME, heading: HeadingLevel.HEADING_1, alignment: AlignmentType.CENTER }),
-          new Paragraph({ text: `${SYSTEM_TITLE} — RECEPCIÓN DE MERCANCÍA`, alignment: AlignmentType.CENTER }),
-          new Paragraph({ text: '' }),
-          new Paragraph({ text: `Proveedor: ${entrada.proveedor}` }),
-          new Paragraph({ text: `Documento: ${entrada.documento}` }),
-          new Paragraph({ text: `Fecha / Hora: ${entrada.fecha} ${entrada.hora}` }),
-          new Paragraph({ text: `Destino: ${entrada.destino}` }),
-          ...(destData ? [new Paragraph({ text: `Dirigido a: ${destData.nombre} (${destData.cargo})` })] : []),
-          new Paragraph({ text: '' }),
-          new Table({
-            rows: [
-              new TableRow({
-                children: [
-                  new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: 'Producto', bold: true })] })] }),
-                  new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: 'Descripción', bold: true })] })] }),
-                  new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: 'Cantidad', bold: true })] })] })
-                ]
-              }),
-              ...entrada.items.map((item) =>
-                new TableRow({
-                  children: [
-                    new TableCell({ children: [new Paragraph(item.producto)] }),
-                    new TableCell({ children: [new Paragraph(item.descripcion)] }),
-                    new TableCell({ children: [new Paragraph(item.cantidad.toString())] })
-                  ]
-                })
-              )
+          // Header Timbrado
+          new Paragraph({
+            children: [
+              new TextRun({ text: 'Hospital Infantil\n', size: 22, color: '70B3D6' }),
+              new TextRun({ text: 'DR. JOSÉ MANUEL RODRÍGUEZ JIMÉNES', bold: true, size: 26, color: '4B9CD5' })
             ],
+            alignment: AlignmentType.LEFT
+          }),
+          new Paragraph({
+            children: [
+              new TextRun({ text: `Santo Domingo, R.D. | ${fechaEspanol}`, size: 19, color: '0F172A' })
+            ],
+            alignment: AlignmentType.RIGHT
+          }),
+          new Paragraph({ text: '' }),
+
+          // Encabezado destinatario
+          new Paragraph({
+            children: [
+              new TextRun({ text: `A: ${cargoDestino}`, size: 20 })
+            ]
+          }),
+          new Paragraph({
+            children: [
+              new TextRun({ text: nombreDestino, bold: true, size: 22 })
+            ]
+          }),
+          new Paragraph({
+            children: [
+              new TextRun({ text: `Asunto: Entrada de Mercancía — Conduce No. ${entrada.documento}`, bold: true, size: 20 })
+            ]
+          }),
+          new Paragraph({ text: '' }),
+
+          // Cuerpo formal
+          new Paragraph({
+            children: [
+              new TextRun({
+                text: 'Por medio de la presente correspondencia oficial, se emite constancia formal respecto a la novedad o certificación técnica descrita a continuación:',
+                size: 20
+              })
+            ]
+          }),
+          new Paragraph({ text: '' }),
+          new Paragraph({
+            children: [
+              new TextRun({
+                text: `Se hace constar formalmente la recepción e ingreso en Almacén y Suministros de los insumos y bienes provistos por el proveedor ${entrada.proveedor}, amparados bajo el Conduce / Factura No. ${entrada.documento}, con destino al área de ${entrada.destino}, según el siguiente desglose técnico:`,
+                size: 20
+              })
+            ]
+          }),
+          new Paragraph({ text: '' }),
+
+          // Tabla de Insumos
+          new Table({
+            rows: tableRows,
             width: { size: 100, type: WidthType.PERCENTAGE }
           }),
-          ...(entrada.observaciones ? [new Paragraph({ text: '' }), new Paragraph({ text: `Observaciones: ${entrada.observaciones}` })] : []),
           new Paragraph({ text: '' }),
-          new Paragraph({ text: '_____________________________          _____________________________', alignment: AlignmentType.CENTER }),
-          new Paragraph({ text: 'Firma Encargado Almacén                          Firma Transportista', alignment: AlignmentType.CENTER }),
+
+          ...(entrada.observaciones ? [
+            new Paragraph({
+              children: [
+                new TextRun({ text: 'Observaciones de la Recepción: ', bold: true, size: 18 }),
+                new TextRun({ text: entrada.observaciones, size: 18, italics: true })
+              ]
+            }),
+            new Paragraph({ text: '' })
+          ] : []),
+
+          new Paragraph({
+            children: [
+              new TextRun({
+                text: 'Para que así conste a los fines institucionales correspondientes, se suscribe el presente documento.',
+                size: 20
+              })
+            ]
+          }),
           new Paragraph({ text: '' }),
-          new Paragraph({ text: `Generado el ${fechaImpresion} a las ${horaImpresion}`, alignment: AlignmentType.RIGHT })
+          new Paragraph({
+            children: [
+              new TextRun({ text: 'Atentamente,', size: 20 })
+            ]
+          }),
+          new Paragraph({ text: '' }),
+          new Paragraph({ text: '' }),
+
+          // Firmas
+          new Paragraph({
+            children: [
+              new TextRun({ text: '_____________________________________', bold: true })
+            ],
+            alignment: AlignmentType.LEFT
+          }),
+          new Paragraph({
+            children: [
+              new TextRun({ text: 'Recibido por', bold: true, size: 20 })
+            ],
+            alignment: AlignmentType.LEFT
+          }),
+          new Paragraph({ text: '' }),
+          new Paragraph({
+            children: [
+              new TextRun({ text: '________________________________________________', bold: true })
+            ],
+            alignment: AlignmentType.CENTER
+          }),
+          new Paragraph({
+            children: [
+              new TextRun({ text: 'José Miguel Mesa Romero', bold: true, size: 20 })
+            ],
+            alignment: AlignmentType.CENTER
+          }),
+          new Paragraph({
+            children: [
+              new TextRun({ text: 'Encargado de Almacén y Suministros', size: 18, color: '64748B' })
+            ],
+            alignment: AlignmentType.CENTER
+          }),
+          new Paragraph({ text: '' }),
+          new Paragraph({ text: '' }),
+
+          // Footer Institucional
+          new Paragraph({
+            children: [
+              new TextRun({ text: 'Calle 28 Esq. Calle 39, Ens. La Fe, Sto. Dgo. D.N. R.D.\n', size: 15, color: '58A0BE' }),
+              new TextRun({ text: 'Telefono : 809-566-3322 | E-mail: direccion@hijmr.gob.do\n', size: 15, color: '58A0BE' }),
+              new TextRun({ text: 'RNC 430040495 | www.hijmr.gob.do | SRS METROPOLITANO', size: 15, color: '58A0BE' })
+            ],
+            alignment: AlignmentType.CENTER
+          })
         ]
       }
     ]
   });
 
   const blob = await Packer.toBlob(doc);
-  saveAs(blob, `Entrada_Mercancia_${entrada.documento}.docx`);
+  saveAs(blob, `Carta_Entrada_Mercancia_${entrada.documento.replace(/\s+/g, '_')}.docx`);
 }
 
 export function generarPDFListadoEntradas(entradas: EntradaMercancia[], destData?: ExportDestinoData) {
-  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
-  const pageWidth = doc.internal.pageSize.getWidth();
-  const { fecha: fechaImpresion, hora: horaImpresion } = getFormattedNow();
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'letter' });
+  const fechaEspanol = getFormattedSpanishDate();
 
-  doc.setFillColor(15, 23, 42);
-  doc.rect(0, 0, pageWidth, 28, 'F');
+  // Header Timbrado
+  drawHospitalTimbradoHeader(doc, fechaEspanol);
 
-  doc.setTextColor(255, 255, 255);
+  let y = 48;
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(13);
-  doc.text(HOSPITAL_NAME, 14, 12);
-
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8.5);
-  doc.setTextColor(148, 163, 184);
-  doc.text(`${SYSTEM_TITLE} — HISTORIAL COMPLETO DE ENTRADAS DE MERCANCÍA`, 14, 19);
+  doc.setFontSize(11);
+  doc.setTextColor(15, 23, 42);
+  doc.text('Historial Oficial de Entradas de Mercancía', 18, y);
 
   if (destData) {
-    doc.setFontSize(8);
-    doc.setTextColor(226, 232, 240);
-    doc.text(`Destino: ${destData.nombre} (${destData.cargo})`, pageWidth - 14, 19, { align: 'right' });
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.setTextColor(71, 85, 105);
+    doc.text(`Destino / Área: ${destData.nombre} (${destData.cargo})`, 18, y + 5);
+    y += 10;
+  } else {
+    y += 6;
   }
 
   const tableData = entradas.map((item, idx) => [
@@ -1182,27 +1835,41 @@ export function generarPDFListadoEntradas(entradas: EntradaMercancia[], destData
   ]);
 
   autoTable(doc, {
-    startY: 34,
+    startY: y,
     head: [['#', 'No. Documento', 'Fecha/Hora', 'Proveedor', 'Destino', 'Productos / Insumos']],
     body: tableData,
     theme: 'grid',
-    headStyles: { fillColor: [16, 185, 129], textColor: [255, 255, 255], fontStyle: 'bold' }
+    headStyles: {
+      fillColor: [241, 245, 249],
+      textColor: [15, 23, 42],
+      fontStyle: 'bold',
+      fontSize: 8,
+      lineColor: [203, 213, 225],
+      lineWidth: 0.2
+    },
+    bodyStyles: {
+      fontSize: 7.5,
+      textColor: [51, 65, 85],
+      lineColor: [226, 232, 240],
+      lineWidth: 0.2
+    },
+    margin: { left: 18, right: 18 }
   });
 
   const finalY = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable?.finalY || 100;
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(9);
-  doc.text(`TOTAL ENTRADAS REGISTRADAS: ${entradas.length}`, 14, finalY + 8);
+  doc.setTextColor(15, 23, 42);
+  doc.text(`TOTAL ENTRADAS REGISTRADAS: ${entradas.length}`, 18, finalY + 8);
 
-  doc.setFontSize(7);
-  doc.setTextColor(148, 163, 184);
-  doc.text(`Hospital Supply Manager | Impreso el ${fechaImpresion} a las ${horaImpresion}`, pageWidth / 2, 198, { align: 'center' });
+  // Footer Timbrado
+  drawHospitalTimbradoFooter(doc);
 
-  doc.save(`Listado_Entradas_${fechaImpresion.replace(/\//g, '-')}.pdf`);
+  doc.save(`Listado_Entradas_${fechaEspanol.replace(/\s+/g, '_')}.pdf`);
 }
 
 export async function generarDOCXListadoEntradas(entradas: EntradaMercancia[], destData?: ExportDestinoData) {
-  const { fecha: fechaImpresion, hora: horaImpresion } = getFormattedNow();
+  const fechaEspanol = getFormattedSpanishDate();
 
   const tableRows = [
     new TableRow({
@@ -1231,21 +1898,39 @@ export async function generarDOCXListadoEntradas(entradas: EntradaMercancia[], d
     sections: [
       {
         children: [
-          new Paragraph({ text: HOSPITAL_NAME, heading: HeadingLevel.HEADING_1, alignment: AlignmentType.CENTER }),
-          new Paragraph({ text: `${SYSTEM_TITLE} — HISTORIAL DE ENTRADAS DE MERCANCÍA`, alignment: AlignmentType.CENTER }),
+          new Paragraph({
+            children: [
+              new TextRun({ text: 'Hospital Infantil\n', size: 22, color: '70B3D6' }),
+              new TextRun({ text: 'DR. JOSÉ MANUEL RODRÍGUEZ JIMÉNES\n', bold: true, size: 26, color: '4B9CD5' }),
+              new TextRun({ text: `${SYSTEM_TITLE} — HISTORIAL DE ENTRADAS DE MERCANCÍA`, bold: true, size: 20, color: '0F172A' })
+            ],
+            alignment: AlignmentType.CENTER
+          }),
+          new Paragraph({
+            children: [new TextRun({ text: `Santo Domingo, R.D. | ${fechaEspanol}`, size: 19, color: '0F172A' })],
+            alignment: AlignmentType.RIGHT
+          }),
           ...(destData ? [new Paragraph({ text: `Destino: ${destData.nombre} (${destData.cargo})`, alignment: AlignmentType.RIGHT })] : []),
           new Paragraph({ text: '' }),
           new Table({ rows: tableRows, width: { size: 100, type: WidthType.PERCENTAGE } }),
           new Paragraph({ text: '' }),
           new Paragraph({ children: [new TextRun({ text: `TOTAL REGISTROS: ${entradas.length}`, bold: true })] }),
-          new Paragraph({ text: `Generado el ${fechaImpresion} a las ${horaImpresion}`, alignment: AlignmentType.RIGHT })
+          new Paragraph({ text: '' }),
+          // Footer Institucional
+          new Paragraph({
+            children: [
+              new TextRun({ text: 'Calle 28 Esq. Calle 39, Ens. La Fe, Sto. Dgo. D.N. R.D. | Telefono: 809-566-3322 | E-mail: direccion@hijmr.gob.do\n', size: 14, color: '58A0BE' }),
+              new TextRun({ text: 'RNC 430040495 | www.hijmr.gob.do | SRS METROPOLITANO', size: 14, color: '58A0BE' })
+            ],
+            alignment: AlignmentType.CENTER
+          })
         ]
       }
     ]
   });
 
   const blob = await Packer.toBlob(doc);
-  saveAs(blob, `Listado_Entradas_${fechaImpresion.replace(/\//g, '-')}.docx`);
+  saveAs(blob, `Listado_Entradas_${fechaEspanol.replace(/\s+/g, '_')}.docx`);
 }
 
 // ==========================================
@@ -1253,22 +1938,17 @@ export async function generarDOCXListadoEntradas(entradas: EntradaMercancia[], d
 // ==========================================
 
 export function generarPDFListadoDestinatarios(destinatarios: Destinatario[]) {
-  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-  const pageWidth = doc.internal.pageSize.getWidth();
-  const { fecha: fechaImpresion, hora: horaImpresion } = getFormattedNow();
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'letter' });
+  const fechaEspanol = getFormattedSpanishDate();
 
-  doc.setFillColor(15, 23, 42);
-  doc.rect(0, 0, pageWidth, 28, 'F');
+  // Header Timbrado
+  drawHospitalTimbradoHeader(doc, fechaEspanol);
 
-  doc.setTextColor(255, 255, 255);
+  let y = 48;
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(13);
-  doc.text(HOSPITAL_NAME, 14, 12);
-
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8.5);
-  doc.setTextColor(148, 163, 184);
-  doc.text(`${SYSTEM_TITLE} — DIRECTORIO OFICIAL DE DESTINATARIOS`, 14, 19);
+  doc.setFontSize(11);
+  doc.setTextColor(15, 23, 42);
+  doc.text('Directorio Oficial de Destinatarios y Dependencias', 18, y);
 
   const tableData = destinatarios.map((item, idx) => [
     (idx + 1).toString(),
@@ -1279,27 +1959,41 @@ export function generarPDFListadoDestinatarios(destinatarios: Destinatario[]) {
   ]);
 
   autoTable(doc, {
-    startY: 34,
+    startY: y + 6,
     head: [['#', 'Nombre Completo', 'Cargo / Puesto', 'Dependencia / Depto', 'Estado']],
     body: tableData,
     theme: 'grid',
-    headStyles: { fillColor: [147, 51, 234], textColor: [255, 255, 255], fontStyle: 'bold' }
+    headStyles: {
+      fillColor: [241, 245, 249],
+      textColor: [15, 23, 42],
+      fontStyle: 'bold',
+      fontSize: 8,
+      lineColor: [203, 213, 225],
+      lineWidth: 0.2
+    },
+    bodyStyles: {
+      fontSize: 8,
+      textColor: [51, 65, 85],
+      lineColor: [226, 232, 240],
+      lineWidth: 0.2
+    },
+    margin: { left: 18, right: 18 }
   });
 
   const finalY = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable?.finalY || 100;
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(9);
-  doc.text(`TOTAL DESTINATARIOS REGISTRADOS: ${destinatarios.length}`, 14, finalY + 8);
+  doc.setTextColor(15, 23, 42);
+  doc.text(`TOTAL DESTINATARIOS REGISTRADOS: ${destinatarios.length}`, 18, finalY + 8);
 
-  doc.setFontSize(7);
-  doc.setTextColor(148, 163, 184);
-  doc.text(`Hospital Supply Manager | Impreso el ${fechaImpresion} a las ${horaImpresion}`, pageWidth / 2, 285, { align: 'center' });
+  // Footer Timbrado
+  drawHospitalTimbradoFooter(doc);
 
-  doc.save(`Directorio_Destinatarios_${fechaImpresion.replace(/\//g, '-')}.pdf`);
+  doc.save(`Directorio_Destinatarios_${fechaEspanol.replace(/\s+/g, '_')}.pdf`);
 }
 
 export async function generarDOCXListadoDestinatarios(destinatarios: Destinatario[]) {
-  const { fecha: fechaImpresion, hora: horaImpresion } = getFormattedNow();
+  const fechaEspanol = getFormattedSpanishDate();
 
   const tableRows = [
     new TableRow({
@@ -1326,20 +2020,38 @@ export async function generarDOCXListadoDestinatarios(destinatarios: Destinatari
     sections: [
       {
         children: [
-          new Paragraph({ text: HOSPITAL_NAME, heading: HeadingLevel.HEADING_1, alignment: AlignmentType.CENTER }),
-          new Paragraph({ text: `${SYSTEM_TITLE} — DIRECTORIO DE DESTINATARIOS`, alignment: AlignmentType.CENTER }),
+          new Paragraph({
+            children: [
+              new TextRun({ text: 'Hospital Infantil\n', size: 22, color: '70B3D6' }),
+              new TextRun({ text: 'DR. JOSÉ MANUEL RODRÍGUEZ JIMÉNES\n', bold: true, size: 26, color: '4B9CD5' }),
+              new TextRun({ text: `${SYSTEM_TITLE} — DIRECTORIO DE DESTINATARIOS`, bold: true, size: 20, color: '0F172A' })
+            ],
+            alignment: AlignmentType.CENTER
+          }),
+          new Paragraph({
+            children: [new TextRun({ text: `Santo Domingo, R.D. | ${fechaEspanol}`, size: 19, color: '0F172A' })],
+            alignment: AlignmentType.RIGHT
+          }),
           new Paragraph({ text: '' }),
           new Table({ rows: tableRows, width: { size: 100, type: WidthType.PERCENTAGE } }),
           new Paragraph({ text: '' }),
           new Paragraph({ children: [new TextRun({ text: `TOTAL DESTINATARIOS: ${destinatarios.length}`, bold: true })] }),
-          new Paragraph({ text: `Generado el ${fechaImpresion} a las ${horaImpresion}`, alignment: AlignmentType.RIGHT })
+          new Paragraph({ text: '' }),
+          // Footer Institucional
+          new Paragraph({
+            children: [
+              new TextRun({ text: 'Calle 28 Esq. Calle 39, Ens. La Fe, Sto. Dgo. D.N. R.D. | Telefono: 809-566-3322 | E-mail: direccion@hijmr.gob.do\n', size: 14, color: '58A0BE' }),
+              new TextRun({ text: 'RNC 430040495 | www.hijmr.gob.do | SRS METROPOLITANO', size: 14, color: '58A0BE' })
+            ],
+            alignment: AlignmentType.CENTER
+          })
         ]
       }
     ]
   });
 
   const blob = await Packer.toBlob(doc);
-  saveAs(blob, `Directorio_Destinatarios_${fechaImpresion.replace(/\//g, '-')}.docx`);
+  saveAs(blob, `Directorio_Destinatarios_${fechaEspanol.replace(/\s+/g, '_')}.docx`);
 }
 
 export const generarPDFDirectorioDestinatarios = generarPDFListadoDestinatarios;
@@ -1350,177 +2062,267 @@ export const generarDOCXDirectorioDestinatarios = generarDOCXListadoDestinatario
 // ==========================================
 
 export function generarPDFOficioCorrespondencia(data: OficioCorrespondenciaData, destData?: ExportDestinoData) {
-  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'letter' });
   const pageWidth = doc.internal.pageSize.getWidth();
-  const { fecha: fechaImpresion, hora: horaImpresion } = getFormattedNow();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const fechaEspanol = getFormattedSpanishDate();
 
-  // Dark Banner Header
-  doc.setFillColor(15, 23, 42); // slate-900
-  doc.rect(0, 0, pageWidth, 32, 'F');
+  // 1. Encabezado Timbrado Oficial
+  drawHospitalTimbradoHeader(doc, fechaEspanol);
 
-  doc.setTextColor(255, 255, 255);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(13);
-  doc.text(HOSPITAL_NAME, 14, 13);
+  // 2. Destinatario y Asunto
+  const receptorNombre = destData ? destData.nombre : 'Dra. Indhira García moreno';
+  const receptorCargo = destData ? destData.cargo : (destData?.dependencia || 'Dirección General');
+  const asuntoTexto = data.asunto || (data.tipo === 'Solicitud' ? `Solicitud de Insumo: ${data.solicitudArticulo}` : `Oficio Oficial de ${data.tipo}`);
 
+  let y = 48;
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8.5);
-  doc.setTextColor(148, 163, 184);
-  doc.text(`${SYSTEM_TITLE} — OFICIO Y CORRESPONDENCIA OFICIAL`, 14, 20);
-
-  // Type Badge
-  doc.setFillColor(14, 116, 144); // cyan-700
-  doc.roundedRect(pageWidth - 55, 10, 41, 8, 2, 2, 'F');
-  doc.setTextColor(255, 255, 255);
-  doc.setFontSize(8);
-  doc.setFont('helvetica', 'bold');
-  doc.text(`OFICIO: ${data.tipo.toUpperCase()}`, pageWidth - 34.5, 15, { align: 'center' });
-
-  let y = 40;
-
-  // Metadata Box
-  doc.setFillColor(248, 250, 252);
-  doc.setDrawColor(226, 232, 240);
-  doc.roundedRect(14, y, pageWidth - 28, 42, 3, 3, 'FD');
-
-  const receptorNombre = destData ? destData.nombre : 'A QUIEN PUEDA INTERESAR';
-  const receptorCargo = destData ? destData.cargo : 'Dirección / Departamento';
-  const receptorDependencia = destData?.dependencia ? ` — ${destData.dependencia}` : '';
-
+  doc.setFontSize(10);
   doc.setTextColor(15, 23, 42);
-  doc.setFontSize(9.5);
+  doc.text(`A: ${receptorCargo}`, 18, y);
+
   doc.setFont('helvetica', 'bold');
-  doc.text(`PARA: ${receptorNombre.toUpperCase()}`, 20, y + 9);
+  doc.setFontSize(10.5);
+  doc.text(receptorNombre, 18, y + 6);
 
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8.5);
-  doc.text(`CARGO / DEPTO: ${receptorCargo}${receptorDependencia}`, 20, y + 16);
-  doc.text(`DE: ${data.usuarioNombre} (Almacén Central)`, 20, y + 23);
-  doc.text(`ASUNTO: ${data.asunto || data.solicitudArticulo || 'Oficio de Correspondencia Oficial'}`, 20, y + 30);
-  doc.text(`FECHA DE EMISIÓN: ${fechaImpresion} — ${horaImpresion}`, 20, y + 37);
-
-  y += 50;
-
-  // Title of letter body
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(11);
-  doc.setTextColor(15, 23, 42);
-  doc.text(`COMUNICACIÓN OFICIAL — ${data.tipo.toUpperCase()}`, 14, y);
+  doc.setFontSize(10);
+  doc.text(`Asunto: ${asuntoTexto}`, 18, y + 12);
 
-  y += 8;
-
-  // Body Content
+  // 3. Cuerpo de la Carta
+  y = 70;
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(9.5);
-  doc.setTextColor(51, 65, 85);
+  doc.setTextColor(30, 41, 59);
+
+  const introText = 'Por medio de la presente correspondencia oficial, se emite constancia formal respecto a la novedad o certificación técnica descrita a continuación:';
+  const introLines = doc.splitTextToSize(introText, pageWidth - 36);
+  doc.text(introLines, 18, y);
+  y += (introLines.length * 5) + 4;
 
   if (data.tipo === 'Solicitud') {
-    doc.text('Por medio de la presente comunicación oficial, se solicita formalmente el suministro del siguiente insumo o artículo para las operaciones del hospital:', 14, y, { maxWidth: pageWidth - 28 });
-    y += 12;
+    const solicitudText = `Se remite la solicitud institucional formal del siguiente insumo o artículo para las operaciones del hospital y sub-almacenes:`;
+    const solLines = doc.splitTextToSize(solicitudText, pageWidth - 36);
+    doc.text(solLines, 18, y);
+    y += (solLines.length * 5) + 3;
 
     autoTable(doc, {
       startY: y,
       head: [['Insumo / Artículo Solicitado', 'Cantidad Requerida', 'Departamento Solicitante']],
       body: [
-        [data.solicitudArticulo || 'No especificado', `${data.solicitudCantidad || 1} unidades`, 'Almacén Central']
+        [data.solicitudArticulo || 'No especificado', `${data.solicitudCantidad || 1} unidades`, 'Almacén y Suministros']
       ],
       theme: 'grid',
-      headStyles: { fillColor: [126, 34, 206], textColor: [255, 255, 255], fontStyle: 'bold' }
+      headStyles: {
+        fillColor: [241, 245, 249],
+        textColor: [15, 23, 42],
+        fontStyle: 'bold',
+        fontSize: 8.5,
+        lineColor: [203, 213, 225],
+        lineWidth: 0.2
+      },
+      bodyStyles: {
+        fontSize: 8.5,
+        textColor: [51, 65, 85],
+        lineColor: [226, 232, 240],
+        lineWidth: 0.2
+      },
+      margin: { left: 18, right: 18 }
     });
 
     const finalY = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable?.finalY || y + 25;
-    y = finalY + 12;
+    y = finalY + 6;
   } else {
-    const textoCuerpo = data.cuerpo || data.asunto || 'Sin más por el momento, quedamos a su entera disposición para cualquier aclaración respecto a esta comunicación.';
-    const lines = doc.splitTextToSize(textoCuerpo, pageWidth - 28);
-    doc.text(lines, 14, y);
-    y += (lines.length * 5) + 12;
+    const textoCuerpo = data.cuerpo || data.asunto || 'Se emite constancia y certificación técnica para los fines institucionales correspondientes.';
+    const lines = doc.splitTextToSize(textoCuerpo, pageWidth - 36);
+    doc.text(lines, 18, y);
+    y += (lines.length * 5) + 6;
   }
 
-  // Closing greeting
-  doc.setFont('helvetica', 'italic');
-  doc.setFontSize(9);
-  doc.text('Agradeciendo de antemano la atención brindada a la presente, se despide atentamente,', 14, y, { maxWidth: pageWidth - 28 });
+  // Párrafo de cierre
+  const parrafoCierre = 'Para que así conste a los fines institucionales correspondientes, se suscribe el presente documento.';
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9.5);
+  doc.text(parrafoCierre, 18, y);
+  y += 7;
 
-  // Signature lines
-  const sigY = Math.max(y + 35, 225);
-  doc.setDrawColor(148, 163, 184);
-  doc.line(25, sigY, 85, sigY);
-  doc.line(pageWidth - 85, sigY, pageWidth - 25, sigY);
+  doc.text('Atentamente,', 18, y);
 
-  doc.setFontSize(8);
+  // 4. Firmas
+  const sigY = Math.min(Math.max(y + 20, 195), pageHeight - 55);
+
+  doc.setDrawColor(15, 23, 42);
+  doc.setLineWidth(0.4);
+  doc.line(18, sigY, 78, sigY);
+
   doc.setFont('helvetica', 'bold');
-  doc.setTextColor(51, 65, 85);
-  doc.text('Firma y Sello — Emisor del Oficio', 55, sigY + 5, { align: 'center' });
-  doc.text('Firma y Sello — Recibido / Conforme', pageWidth - 55, sigY + 5, { align: 'center' });
+  doc.setFontSize(9.5);
+  doc.setTextColor(15, 23, 42);
+  doc.text('Recibido por', 18, sigY + 5);
 
   doc.setFont('helvetica', 'normal');
-  doc.setTextColor(100, 116, 139);
-  doc.text(data.usuarioNombre, 55, sigY + 9, { align: 'center' });
-  doc.text(receptorNombre, pageWidth - 55, sigY + 9, { align: 'center' });
+  doc.setFontSize(8);
+  doc.setTextColor(71, 85, 105);
+  doc.text(receptorNombre, 18, sigY + 9);
 
-  // Footer
-  doc.setFontSize(7);
-  doc.setTextColor(148, 163, 184);
-  doc.text(`Hospital Supply Manager | Documento generado el ${fechaImpresion} a las ${horaImpresion}`, pageWidth / 2, 285, { align: 'center' });
+  // Firma Emisor Almacén
+  const sigCenterX = pageWidth / 2 + 15;
+  doc.line(sigCenterX - 38, sigY + 18, sigCenterX + 38, sigY + 18);
 
-  const fileName = `Oficio_${data.tipo}_${receptorNombre.replace(/\s+/g, '_')}.pdf`;
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9.5);
+  doc.setTextColor(15, 23, 42);
+  doc.text(data.usuarioNombre || 'José Miguel Mesa Romero', sigCenterX, sigY + 23, { align: 'center' });
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8.5);
+  doc.setTextColor(71, 85, 105);
+  doc.text('Encargado de Almacén y Suministros', sigCenterX, sigY + 27.5, { align: 'center' });
+
+  // 5. Pie de Página Timbrado Oficial
+  drawHospitalTimbradoFooter(doc);
+
+  const fileName = `Carta_Oficio_${data.tipo}_${receptorNombre.replace(/\s+/g, '_')}.pdf`;
   doc.save(fileName);
 }
 
 export async function generarDOCXOficioCorrespondencia(data: OficioCorrespondenciaData, destData?: ExportDestinoData) {
-  const { fecha: fechaImpresion, hora: horaImpresion } = getFormattedNow();
-  const receptorNombre = destData ? destData.nombre : 'A QUIEN PUEDA INTERESAR';
-  const receptorCargo = destData ? destData.cargo : 'Dirección / Departamento';
-  const receptorDependencia = destData?.dependencia ? ` — ${destData.dependencia}` : '';
+  const fechaEspanol = getFormattedSpanishDate();
+  const receptorNombre = destData ? destData.nombre : 'Dra. Indhira García moreno';
+  const receptorCargo = destData ? destData.cargo : (destData?.dependencia || 'Dirección General');
+  const asuntoTexto = data.asunto || (data.tipo === 'Solicitud' ? `Solicitud de Insumo: ${data.solicitudArticulo}` : `Oficio Oficial de ${data.tipo}`);
 
   const doc = new Document({
     sections: [
       {
         children: [
+          // Header Timbrado
           new Paragraph({
-            children: [new TextRun({ text: HOSPITAL_NAME, bold: true, size: 26, color: '0F172A' })],
-            alignment: AlignmentType.CENTER
+            children: [
+              new TextRun({ text: 'Hospital Infantil\n', size: 22, color: '70B3D6' }),
+              new TextRun({ text: 'DR. JOSÉ MANUEL RODRÍGUEZ JIMÉNES', bold: true, size: 26, color: '4B9CD5' })
+            ],
+            alignment: AlignmentType.LEFT
           }),
           new Paragraph({
-            children: [new TextRun({ text: `${SYSTEM_TITLE} — DEPARTAMENTO DE ALMACÉN CENTRAL`, bold: true, size: 18, color: '0E7490' })],
-            alignment: AlignmentType.CENTER
-          }),
-          new Paragraph({ text: '' }),
-          new Paragraph({
-            children: [new TextRun({ text: `Santo Domingo, R.D. — ${fechaImpresion}`, bold: true, size: 20 })],
+            children: [
+              new TextRun({ text: `Santo Domingo, R.D. | ${fechaEspanol}`, size: 19, color: '0F172A' })
+            ],
             alignment: AlignmentType.RIGHT
           }),
           new Paragraph({ text: '' }),
+
+          // Encabezado destinatario
           new Paragraph({
-            children: [new TextRun({ text: `OFICIO OFICIAL DE ${data.tipo.toUpperCase()}`, bold: true, size: 22, color: '0F172A' })]
+            children: [
+              new TextRun({ text: `A: ${receptorCargo}`, size: 20 })
+            ]
+          }),
+          new Paragraph({
+            children: [
+              new TextRun({ text: receptorNombre, bold: true, size: 22 })
+            ]
+          }),
+          new Paragraph({
+            children: [
+              new TextRun({ text: `Asunto: ${asuntoTexto}`, bold: true, size: 20 })
+            ]
           }),
           new Paragraph({ text: '' }),
-          new Paragraph({ children: [new TextRun({ text: 'PARA: ', bold: true, size: 20 }), new TextRun({ text: receptorNombre.toUpperCase(), bold: true, size: 20 })] }),
-          new Paragraph({ children: [new TextRun({ text: 'CARGO: ', bold: true, size: 20 }), new TextRun({ text: `${receptorCargo}${receptorDependencia}`, size: 20 })] }),
-          new Paragraph({ children: [new TextRun({ text: 'DE: ', bold: true, size: 20 }), new TextRun({ text: `${data.usuarioNombre} (Almacén Central)`, size: 20 })] }),
-          new Paragraph({ children: [new TextRun({ text: 'ASUNTO: ', bold: true, size: 20 }), new TextRun({ text: data.asunto || data.solicitudArticulo || 'Comunicación Oficial', size: 20 })] }),
-          new Paragraph({ text: '' }),
+
+          // Cuerpo formal
           new Paragraph({
             children: [
               new TextRun({
-                text: data.cuerpo || (data.tipo === 'Solicitud' ? `Solicitud formal de ${data.solicitudCantidad || 1} unidades de ${data.solicitudArticulo}.` : 'Por medio de la presente comunicación oficial...'),
+                text: 'Por medio de la presente correspondencia oficial, se emite constancia formal respecto a la novedad o certificación técnica descrita a continuación:',
                 size: 20
               })
             ]
           }),
           new Paragraph({ text: '' }),
+
+          new Paragraph({
+            children: [
+              new TextRun({
+                text: data.cuerpo || (data.tipo === 'Solicitud' ? `Solicitud formal de ${data.solicitudCantidad || 1} unidades de ${data.solicitudArticulo} para el área de Almacén y Suministros.` : 'Constancia y certificación técnica emitida para los fines institucionales correspondientes.'),
+                size: 20
+              })
+            ]
+          }),
           new Paragraph({ text: '' }),
-          new Paragraph({ text: '_____________________________          _____________________________', alignment: AlignmentType.CENTER }),
-          new Paragraph({ text: 'Firma y Sello Emisor                                Firma y Sello Recibido', alignment: AlignmentType.CENTER }),
-          new Paragraph({ text: `${data.usuarioNombre}                                ${receptorNombre}`, alignment: AlignmentType.CENTER }),
+
+          new Paragraph({
+            children: [
+              new TextRun({
+                text: 'Para que así conste a los fines institucionales correspondientes, se suscribe el presente documento.',
+                size: 20
+              })
+            ]
+          }),
           new Paragraph({ text: '' }),
-          new Paragraph({ text: `Generado el ${fechaImpresion} a las ${horaImpresion}`, alignment: AlignmentType.RIGHT })
+          new Paragraph({
+            children: [
+              new TextRun({ text: 'Atentamente,', size: 20 })
+            ]
+          }),
+          new Paragraph({ text: '' }),
+          new Paragraph({ text: '' }),
+
+          // Firmas
+          new Paragraph({
+            children: [
+              new TextRun({ text: '_____________________________________', bold: true })
+            ],
+            alignment: AlignmentType.LEFT
+          }),
+          new Paragraph({
+            children: [
+              new TextRun({ text: 'Recibido por', bold: true, size: 20 })
+            ],
+            alignment: AlignmentType.LEFT
+          }),
+          new Paragraph({
+            children: [
+              new TextRun({ text: receptorNombre, size: 18, color: '64748B' })
+            ],
+            alignment: AlignmentType.LEFT
+          }),
+          new Paragraph({ text: '' }),
+          new Paragraph({
+            children: [
+              new TextRun({ text: '________________________________________________', bold: true })
+            ],
+            alignment: AlignmentType.CENTER
+          }),
+          new Paragraph({
+            children: [
+              new TextRun({ text: data.usuarioNombre || 'José Miguel Mesa Romero', bold: true, size: 20 })
+            ],
+            alignment: AlignmentType.CENTER
+          }),
+          new Paragraph({
+            children: [
+              new TextRun({ text: 'Encargado de Almacén y Suministros', size: 18, color: '64748B' })
+            ],
+            alignment: AlignmentType.CENTER
+          }),
+          new Paragraph({ text: '' }),
+          new Paragraph({ text: '' }),
+
+          // Footer Institucional
+          new Paragraph({
+            children: [
+              new TextRun({ text: 'Calle 28 Esq. Calle 39, Ens. La Fe, Sto. Dgo. D.N. R.D.\n', size: 15, color: '58A0BE' }),
+              new TextRun({ text: 'Telefono : 809-566-3322 | E-mail: direccion@hijmr.gob.do\n', size: 15, color: '58A0BE' }),
+              new TextRun({ text: 'RNC 430040495 | www.hijmr.gob.do | SRS METROPOLITANO', size: 15, color: '58A0BE' })
+            ],
+            alignment: AlignmentType.CENTER
+          })
         ]
       }
     ]
   });
 
   const blob = await Packer.toBlob(doc);
-  saveAs(blob, `Oficio_${data.tipo}_${receptorNombre.replace(/\s+/g, '_')}.docx`);
+  saveAs(blob, `Carta_Oficio_${data.tipo}_${receptorNombre.replace(/\s+/g, '_')}.docx`);
 }

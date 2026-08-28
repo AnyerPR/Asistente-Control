@@ -1,16 +1,35 @@
 <!doctype html>
-<html lang="en">
+<html lang="es">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#0f172a" />
-    <meta name="msapplication-TileColor" content="#0f172a" />
-    <meta name="msapplication-TileImage" content="./logo.png" />
-    <link rel="icon" type="image/png" href="./logo.png" />
-    <link rel="shortcut icon" type="image/png" href="./logo.png" />
-    <link rel="apple-touch-icon" href="./logo.png" />
-    <link rel="manifest" href="./manifest.webmanifest" />
-    <title>Asistente-Control</title>
+    <title>Hospital Supply Manager</title>
+    <meta name="description" content="Sistema de gestión de suministros hospitalarios, despacho global, control de agua, correspondencia, salidas de almacén e inventario con Firestore." />
+    <meta property="og:title" content="Hospital Supply Manager" />
+    <meta property="og:description" content="Sistema de gestión de suministros hospitalarios, despacho global, control de agua, correspondencia, salidas de almacén e inventario con Firestore." />
+    <script>
+      // Guard for iframe/browser environments where window.fetch has only a getter and no setter
+      (function() {
+        try {
+          var _origFetch = typeof window !== 'undefined' && window.fetch ? window.fetch.bind(window) : undefined;
+          var desc = Object.getOwnPropertyDescriptor(window, 'fetch');
+          if (!desc || !desc.set || !desc.writable) {
+            Object.defineProperty(window, 'fetch', {
+              get: function() {
+                return _origFetch;
+              },
+              set: function(fn) {
+                _origFetch = fn;
+              },
+              configurable: true,
+              enumerable: true
+            });
+          }
+        } catch (e) {
+          console.warn('Fetch getter/setter guard initialized with fallback:', e);
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
